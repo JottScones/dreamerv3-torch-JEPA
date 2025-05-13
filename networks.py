@@ -13,9 +13,9 @@ import tools
 class RSSM(nn.Module):
     def __init__(
         self,
-        stoch=30,
-        deter=200,
-        hidden=200,
+        stoch=30, # Number of stochastic latent variables
+        deter=200, # The recurrent state
+        hidden=200, # Number of hidden units in the GRU cell
         rec_depth=1,
         discrete=False,
         act="SiLU",
@@ -45,6 +45,7 @@ class RSSM(nn.Module):
         self._embed = embed
         self._device = device
 
+        # If the stochastic representation is discrete, we one-hot encode.
         inp_layers = []
         if self._discrete:
             inp_dim = self._stoch * self._discrete + num_actions
@@ -54,11 +55,18 @@ class RSSM(nn.Module):
         if norm:
             inp_layers.append(nn.LayerNorm(self._hidden, eps=1e-03))
         inp_layers.append(act())
+
+        # ----- Imagination network -----
+        # Layers to process the input (stoch + action) and produce the input for the GRU cell.
         self._img_in_layers = nn.Sequential(*inp_layers)
         self._img_in_layers.apply(tools.weight_init)
+
+        # Sequence model to update the recurrent state.
         self._cell = GRUCell(self._hidden, self._deter, norm=norm)
         self._cell.apply(tools.weight_init)
 
+        # Layer to process the recurrent state and to produce input to imgs_stat_layer
+        # to predict the next distribution of latent variable stoch.
         img_out_layers = []
         inp_dim = self._deter
         img_out_layers.append(nn.Linear(inp_dim, self._hidden, bias=False))
@@ -68,6 +76,7 @@ class RSSM(nn.Module):
         self._img_out_layers = nn.Sequential(*img_out_layers)
         self._img_out_layers.apply(tools.weight_init)
 
+        # ------ Observation network -----
         obs_out_layers = []
         inp_dim = self._deter + self._embed
         obs_out_layers.append(nn.Linear(inp_dim, self._hidden, bias=False))
@@ -77,16 +86,24 @@ class RSSM(nn.Module):
         self._obs_out_layers = nn.Sequential(*obs_out_layers)
         self._obs_out_layers.apply(tools.weight_init)
 
+        # Layers to produce the sufficient statistics of the distribution of the latent variable.
         if self._discrete:
-            self._imgs_stat_layer = nn.Linear(
-                self._hidden, self._stoch * self._discrete
-            )
+            # If the stochastic representation is discrete, we produce logits for each class of the categorical distribution.
+            # So output is length of stoch * number of classes.
+
+            self._imgs_stat_layer = nn.Linear(self._hidden, self._stoch * self._discrete)
             self._imgs_stat_layer.apply(tools.uniform_weight_init(1.0))
+
             self._obs_stat_layer = nn.Linear(self._hidden, self._stoch * self._discrete)
             self._obs_stat_layer.apply(tools.uniform_weight_init(1.0))
+
         else:
+            # If the stochastic representation is continuous, we produce mean and std for each class of the normal distribution.
+            # So output is two vectors of length stoch one for mean one for std.
+
             self._imgs_stat_layer = nn.Linear(self._hidden, 2 * self._stoch)
             self._imgs_stat_layer.apply(tools.uniform_weight_init(1.0))
+
             self._obs_stat_layer = nn.Linear(self._hidden, 2 * self._stoch)
             self._obs_stat_layer.apply(tools.uniform_weight_init(1.0))
 
@@ -97,6 +114,15 @@ class RSSM(nn.Module):
             )
 
     def initial(self, batch_size):
+        """
+        If the embedding distribution is discrete, we represent it as unnormalised logits, parametrising a categorical distribution.
+        Stoch is a one-hot encoded vector sample from this categorical distribution: z_t.
+
+        If the embedding distribution is continuous, we represent it as a normal distribution with mean and std.
+        Stoch is a sample from this normal distribution: z_t.
+
+        Deter is the recurrent state of the GRU cell: h_t.
+        """
         deter = torch.zeros(batch_size, self._deter, device=self._device)
         if self._discrete:
             state = dict(
@@ -115,8 +141,10 @@ class RSSM(nn.Module):
                 stoch=torch.zeros([batch_size, self._stoch], device=self._device),
                 deter=deter,
             )
+
         if self._initial == "zeros":
             return state
+
         elif self._initial == "learned":
             state["deter"] = torch.tanh(self.W).repeat(batch_size, 1)
             state["stoch"] = self.get_stoch(state["deter"])
@@ -125,6 +153,16 @@ class RSSM(nn.Module):
             raise NotImplementedError(self._initial)
 
     def observe(self, embed, action, is_first, state=None):
+        """
+        We observe the environment over multiple time steps, iterate over time progressing the recurrent state
+        and the stochastic latent variable.
+
+        Even though we are calling obs_step which calls img_step, we are not using the imagination network to produce
+        stochastic latent variable. We simply use it to update the recurrent state and in obs_step we use the 
+        sensory input to produce stoch.  
+        """
+
+        # Swap first two dimensions
         swap = lambda x: x.permute([1, 0] + list(range(2, len(x.shape))))
         # (batch, time, ch) -> (time, batch, ch)
         embed, action, is_first = swap(embed), swap(action), swap(is_first)
@@ -132,9 +170,9 @@ class RSSM(nn.Module):
         post, prior = tools.static_scan(
             lambda prev_state, prev_act, embed, is_first: self.obs_step(
                 prev_state[0], prev_act, embed, is_first
-            ),
-            (action, embed, is_first),
-            (state, state),
+            ), # fn
+            (action, embed, is_first), # inputs
+            (state, state), # start (initial prev_state[0] = None)
         )
 
         # (batch, time, stoch, discrete_num) -> (batch, time, stoch, discrete_num)
@@ -143,6 +181,7 @@ class RSSM(nn.Module):
         return post, prior
 
     def imagine_with_action(self, action, state):
+        # Swap first two dimensions
         swap = lambda x: x.permute([1, 0] + list(range(2, len(x.shape))))
         assert isinstance(state, dict), state
         action = swap(action)
@@ -159,11 +198,13 @@ class RSSM(nn.Module):
         return torch.cat([stoch, state["deter"]], -1)
 
     def get_dist(self, state, dtype=None):
+        # If discrete representation we use a categorical distribution, otherwise a normal distribution.
         if self._discrete:
             logit = state["logit"]
             dist = torchd.independent.Independent(
                 tools.OneHotDist(logit, unimix_ratio=self._unimix_ratio), 1
             )
+
         else:
             mean, std = state["mean"], state["std"]
             dist = tools.ContDist(
@@ -172,16 +213,22 @@ class RSSM(nn.Module):
         return dist
 
     def obs_step(self, prev_state, prev_action, embed, is_first, sample=True):
+        """
+        Observation step of the RSSM, to calculate the new recurrent state and stochastic latent variable from observation (embed) rather than imagination.
+        """
+
         # initialize all prev_state
+        # If there is no previous state or every element in is_first is True, we initialize the entire previous state.
         if prev_state == None or torch.sum(is_first) == len(is_first):
             prev_state = self.initial(len(is_first))
             prev_action = torch.zeros(
                 (len(is_first), self._num_actions), device=self._device
             )
-        # overwrite the prev_state only where is_first=True
+
+        # Otherwise only overwrite the prev_state only where is_first=True
         elif torch.sum(is_first) > 0:
             is_first = is_first[:, None]
-            prev_action *= 1.0 - is_first
+            prev_action *= 1.0 - is_first # Set the action to zero where is_first=True
             init_state = self.initial(len(is_first))
             for key, val in prev_state.items():
                 is_first_r = torch.reshape(
@@ -192,12 +239,21 @@ class RSSM(nn.Module):
                     val * (1.0 - is_first_r) + init_state[key] * is_first_r
                 )
 
+        # Calculate the recurrent state h_t.
         prior = self.img_step(prev_state, prev_action)
+
+        # Concatenate the recurrent state with the embedding of the visual and vector inputs (sensory input x_t).
         x = torch.cat([prior["deter"], embed], -1)
+
+        # Pass the concatenated input through a linear layer to produce the input for the sufficient statistics layer.
         # (batch_size, prior_deter + embed) -> (batch_size, hidden)
         x = self._obs_out_layers(x)
+
+        # Map sensory input to the sufficient statistics of the distribution of the latent variable.
         # (batch_size, hidden) -> (batch_size, stoch, discrete_num)
         stats = self._suff_stats_layer("obs", x)
+
+        # Use the statistics to sample from the distribution of the latent variable or just use the mode.
         if sample:
             stoch = self.get_dist(stats).sample()
         else:
@@ -206,7 +262,17 @@ class RSSM(nn.Module):
         return post, prior
 
     def img_step(self, prev_state, prev_action, sample=True):
+        """
+            Imagination step of the RSSM, to calculate the new recurrent state and stochastic latent variable.
+            We concatenate the previous latent state and action and pass it through a linear layer to 
+            produce input of size _hidden for the GRU. 
+
+            The GRU cell updates the recurrent state: h_t.
+
+            The img_out and img_stat layers produce the new distribution of the latent variable: z_t.
+        """ 
         # (batch, stoch, discrete_num)
+        # Stoch is the sample from the distribution of the previous latent variable.
         prev_stoch = prev_state["stoch"]
         if self._discrete:
             shape = list(prev_stoch.shape[:-2]) + [self._stoch * self._discrete]
@@ -214,17 +280,27 @@ class RSSM(nn.Module):
             prev_stoch = prev_stoch.reshape(shape)
         # (batch, stoch * discrete_num) -> (batch, stoch * discrete_num + action)
         x = torch.cat([prev_stoch, prev_action], -1)
+
+        # Pass the concatenated input through a linear layer to produce the input for the GRU cell.
         # (batch, stoch * discrete_num + action, embed) -> (batch, hidden)
         x = self._img_in_layers(x)
+
+        # Perform (one) step of the GRU cell to update the recurrent state.
         for _ in range(self._rec_depth):  # rec depth is not correctly implemented
             deter = prev_state["deter"]
             # (batch, hidden), (batch, deter) -> (batch, deter), (batch, deter)
             x, deter = self._cell(x, [deter])
             deter = deter[0]  # Keras wraps the state in a list.
+
+        # Pass recurrent state through a linear layer to produce the output of the GRU cell.
         # (batch, deter) -> (batch, hidden)
         x = self._img_out_layers(x)
+
+        # Calculate the statistics (mean and std) that describe the new distribution of the latent variable.
         # (batch, hidden) -> (batch_size, stoch, discrete_num)
         stats = self._suff_stats_layer("ims", x)
+
+        # Use the statistics to sample from the distribution of the latent variable or just use the mode.
         if sample:
             stoch = self.get_dist(stats).sample()
         else:
@@ -239,6 +315,13 @@ class RSSM(nn.Module):
         return dist.mode()
 
     def _suff_stats_layer(self, name, x):
+        """
+        Produces the sufficient statistic for the distribution of the latent variable. 
+        If the distribution is discrete, then it is simply described by the logits.
+
+        If the distribution is continuous, then it is described by the mean and std.
+        """
+
         if self._discrete:
             if name == "ims":
                 x = self._imgs_stat_layer(x)
@@ -291,6 +374,9 @@ class RSSM(nn.Module):
 
 
 class MultiEncoder(nn.Module):
+    """
+    MultiEncoder is a module that combines CNN and MLP encoders for processing image and vector data, respectively.
+    """
     def __init__(
         self,
         shapes,
@@ -307,11 +393,16 @@ class MultiEncoder(nn.Module):
     ):
         super(MultiEncoder, self).__init__()
         excluded = ("is_first", "is_last", "is_terminal", "reward")
+
+        # Shapes are expected to be a dictionary with keys as the names of the inputs/observations and values as their shapes.
         shapes = {
             k: v
             for k, v in shapes.items()
             if k not in excluded and not k.startswith("log_")
         }
+
+        # In the config file we define regex patterns for the keys of the CNN and MLP inputs.
+        # Here we split the shapes into CNN and MLP shapes based on these patterns.
         self.cnn_shapes = {
             k: v for k, v in shapes.items() if len(v) == 3 and re.match(cnn_keys, k)
         }
@@ -325,14 +416,20 @@ class MultiEncoder(nn.Module):
 
         self.outdim = 0
         if self.cnn_shapes:
+            # Expect all images to have same height and width and concatenate along the channel axis.
+            # The height and width of the first image in the shapes dictionary.
             input_ch = sum([v[-1] for v in self.cnn_shapes.values()])
             input_shape = tuple(self.cnn_shapes.values())[0][:2] + (input_ch,)
+            # Create CNN encoder.
             self._cnn = ConvEncoder(
                 input_shape, cnn_depth, act, norm, kernel_size, minres
             )
             self.outdim += self._cnn.outdim
+
         if self.mlp_shapes:
+            # We sum over the number of elements in each input since we will flatten and concatenate them.
             input_size = sum([sum(v) for v in self.mlp_shapes.values()])
+            # Create MLP encoder.
             self._mlp = MLP(
                 input_size,
                 None,
@@ -346,18 +443,26 @@ class MultiEncoder(nn.Module):
             self.outdim += mlp_units
 
     def forward(self, obs):
+        # torch.cat(dim=-1) concatenates the tensors along the last dimension - which is the channel for images 
+        # and a single vector for MLP.
         outputs = []
         if self.cnn_shapes:
             inputs = torch.cat([obs[k] for k in self.cnn_shapes], -1)
             outputs.append(self._cnn(inputs))
+
         if self.mlp_shapes:
             inputs = torch.cat([obs[k] for k in self.mlp_shapes], -1)
             outputs.append(self._mlp(inputs))
+        
+        # Both encoders produce vectors so we can concatenate them.
         outputs = torch.cat(outputs, -1)
         return outputs
 
 
 class MultiDecoder(nn.Module):
+    """
+    MultiDecoder, complements the MultiEncoder, is a module that combines CNN and MLP decoders for processing image and vector data, respectively.
+    """
     def __init__(
         self,
         feat_size,
@@ -378,7 +483,11 @@ class MultiDecoder(nn.Module):
     ):
         super(MultiDecoder, self).__init__()
         excluded = ("is_first", "is_last", "is_terminal")
+
+        # Shapes are expected to be a dictionary with keys as the names of the inputs/observations and values as their shapes.
         shapes = {k: v for k, v in shapes.items() if k not in excluded}
+
+        # Separate the shapes into CNN and MLP shapes based on the regex patterns defined in the config file.
         self.cnn_shapes = {
             k: v for k, v in shapes.items() if len(v) == 3 and re.match(cnn_keys, k)
         }
@@ -391,6 +500,8 @@ class MultiDecoder(nn.Module):
         print("Decoder MLP shapes:", self.mlp_shapes)
 
         if self.cnn_shapes:
+            # Takes height and width of the first image in the shapes dictionary and sums over all input channels.
+            # Shape is (channels, height, width) which is expected by the ConvDecoder.
             some_shape = list(self.cnn_shapes.values())[0]
             shape = (sum(x[-1] for x in self.cnn_shapes.values()),) + some_shape[:-1]
             self._cnn = ConvDecoder(
@@ -404,6 +515,7 @@ class MultiDecoder(nn.Module):
                 outscale=outscale,
                 cnn_sigmoid=cnn_sigmoid,
             )
+
         if self.mlp_shapes:
             self._mlp = MLP(
                 feat_size,
@@ -421,6 +533,7 @@ class MultiDecoder(nn.Module):
     def forward(self, features):
         dists = {}
         if self.cnn_shapes:
+            # Split channels into separate tensors for each input.
             feat = features
             outputs = self._cnn(feat)
             split_sizes = [v[-1] for v in self.cnn_shapes.values()]
@@ -431,11 +544,14 @@ class MultiDecoder(nn.Module):
                     for key, output in zip(self.cnn_shapes.keys(), outputs)
                 }
             )
+
         if self.mlp_shapes:
             dists.update(self._mlp(features))
+
         return dists
 
     def _make_image_dist(self, mean):
+        # We interpret output of cnn decoder as a mean of a distribution either a Normal or MSE (deterministic output).
         if self._image_dist == "normal":
             return tools.ContDist(
                 torchd.independent.Independent(torchd.normal.Normal(mean, 1), 3)
@@ -446,6 +562,11 @@ class MultiDecoder(nn.Module):
 
 
 class ConvEncoder(nn.Module):
+    """
+    CNN encoder for processing image data.
+
+    TODO: UPDATE ENCODER HERE
+    """
     def __init__(
         self,
         input_shape,
@@ -453,14 +574,20 @@ class ConvEncoder(nn.Module):
         act="SiLU",
         norm=True,
         kernel_size=4,
-        minres=4,
+        minres=4, # Miniumum spatial resolution (height and width) of the input image.
     ):
         super(ConvEncoder, self).__init__()
         act = getattr(torch.nn, act)
         h, w, input_ch = input_shape
+
+        # Calculate how many stages of convolutions we need to apply to the input image to reach the minimum resolution.
+        # we effectively halve the height and width of the image at each stage.
         stages = int(np.log2(h) - np.log2(minres))
         in_dim = input_ch
+
+        # Number of output channels for each convolution layer, doubles at each stage.
         out_dim = depth
+
         layers = []
         for i in range(stages):
             layers.append(
@@ -485,21 +612,33 @@ class ConvEncoder(nn.Module):
 
     def forward(self, obs):
         obs -= 0.5
+        # Combine the batch and time dimensions into a single dimension so we have a batch of images.
         # (batch, time, h, w, ch) -> (batch * time, h, w, ch)
         x = obs.reshape((-1,) + tuple(obs.shape[-3:]))
+
+        # Reorder the dimensions to match the expected input shape of the Conv2d layer.
         # (batch * time, h, w, ch) -> (batch * time, ch, h, w)
         x = x.permute(0, 3, 1, 2)
         x = self.layers(x)
+
         # (batch * time, ...) -> (batch * time, -1)
+        # Flatten the output of the last convolution layer to be a vecor of size (batch * time, -1) where -1 is the product of all remaining dimensions.
         x = x.reshape([x.shape[0], np.prod(x.shape[1:])])
+
+        # Separate the batch and time dimensions again.
         # (batch * time, -1) -> (batch, time, -1)
         return x.reshape(list(obs.shape[:-3]) + [x.shape[-1]])
 
 
 class ConvDecoder(nn.Module):
+    """
+    CNN decoder for processing image data.
+    
+    TODO: UPDATE DECODER HERE
+    """
     def __init__(
         self,
-        feat_size,
+        feat_size, # Dimension of the embedding vector from the encoder.
         shape=(3, 64, 64),
         depth=32,
         act=nn.ELU,
@@ -513,13 +652,20 @@ class ConvDecoder(nn.Module):
         act = getattr(torch.nn, act)
         self._shape = shape
         self._cnn_sigmoid = cnn_sigmoid
+
+        # Number of layers to reach original resolution.
         layer_num = int(np.log2(shape[1]) - np.log2(minres))
         self._minres = minres
+
+        # Number of input channels for the first layer.
         out_ch = minres**2 * depth * 2 ** (layer_num - 1)
         self._embed_size = out_ch
 
+        # Linear layer helps to reshape the input vector to the expected shape of the first convolution layer.
         self._linear_layer = nn.Linear(feat_size, out_ch)
         self._linear_layer.apply(tools.uniform_weight_init(outscale))
+
+        # Number of output channels halves at each layer.
         in_dim = out_ch // (minres**2)
         out_dim = in_dim // 2
 
@@ -527,7 +673,9 @@ class ConvDecoder(nn.Module):
         h, w = minres, minres
         for i in range(layer_num):
             bias = False
+
             if i == layer_num - 1:
+                # We want raw output for the last layer no normalisatin or activation.
                 out_dim = self._shape[0]
                 act = False
                 bias = True
@@ -560,6 +708,7 @@ class ConvDecoder(nn.Module):
         self.layers = nn.Sequential(*layers)
 
     def calc_same_pad(self, k, s, d):
+        # Calculate the padding needed wrt the kernel size, stride and dilation.
         val = d * (k - 1) - s + 1
         pad = math.ceil(val / 2)
         outpad = pad * 2 - val
@@ -586,15 +735,18 @@ class ConvDecoder(nn.Module):
 
 
 class MLP(nn.Module):
+    """
+    MLP definition used everywhere in the code for encoding, decoding, actor and critic networks.
+    """
     def __init__(
         self,
-        inp_dim,
-        shape,
-        layers,
-        units,
+        inp_dim, # Input dimension of the MLP
+        shape, # Shape of the output tensor, None for encoder output (not a distribution)
+        layers, # Number of hidden layers
+        units, # Number of units in each hidden layer
         act="SiLU",
         norm=True,
-        dist="normal",
+        dist="normal", # String that specifies the type of distribution to use for the output
         std=1.0,
         min_std=0.1,
         max_std=1.0,
@@ -611,17 +763,21 @@ class MLP(nn.Module):
         if self._shape is not None and len(self._shape) == 0:
             self._shape = (1,)
         act = getattr(torch.nn, act)
+
+        # Parameters for the distribution
         self._dist = dist
         self._std = std if isinstance(std, str) else torch.tensor((std,), device=device)
         self._min_std = min_std
         self._max_std = max_std
         self._absmax = absmax
-        self._temp = temp
-        self._unimix_ratio = unimix_ratio
+        self._temp = temp # Used for Gumbel softmax (Normal softmax with nice gradients)
+        self._unimix_ratio = unimix_ratio # Used for onehot distributions
+
         self._symlog_inputs = symlog_inputs
         self._device = device
 
         self.layers = nn.Sequential()
+        # Initialise the first and hidden layers of the MLP
         for i in range(layers):
             self.layers.add_module(
                 f"{name}_linear{i}", nn.Linear(inp_dim, units, bias=False)
@@ -635,20 +791,28 @@ class MLP(nn.Module):
                 inp_dim = units
         self.layers.apply(tools.weight_init)
 
+
         if isinstance(self._shape, dict):
+            # If shape is a dictionary, we create a separate linear layer for each key in the dictionary.
             self.mean_layer = nn.ModuleDict()
             for name, shape in self._shape.items():
                 self.mean_layer[name] = nn.Linear(inp_dim, np.prod(shape))
             self.mean_layer.apply(tools.uniform_weight_init(outscale))
+
+            # If std is learned, we create a separate linear layer for each key in the dictionary. 
             if self._std == "learned":
                 assert dist in ("tanh_normal", "normal", "trunc_normal", "huber"), dist
                 self.std_layer = nn.ModuleDict()
                 for name, shape in self._shape.items():
                     self.std_layer[name] = nn.Linear(inp_dim, np.prod(shape))
                 self.std_layer.apply(tools.uniform_weight_init(outscale))
+
         elif self._shape is not None:
+            # If shape is not a dictionary, we create a single linear layer for the mean.
             self.mean_layer = nn.Linear(inp_dim, np.prod(self._shape))
             self.mean_layer.apply(tools.uniform_weight_init(outscale))
+
+            # If std is learned, we create a single linear layer for the std. 
             if self._std == "learned":
                 assert dist in ("tanh_normal", "normal", "trunc_normal", "huber"), dist
                 self.std_layer = nn.Linear(units, np.prod(self._shape))
@@ -657,15 +821,20 @@ class MLP(nn.Module):
     def forward(self, features, dtype=None):
         x = features
         if self._symlog_inputs:
+            # Symlog acts as normalisation for the inputs
             x = tools.symlog(x)
+
         out = self.layers(x)
-        # Used for encoder output
+        # Used for encoder output which will be a vector of size "units"
         if self._shape is None:
             return out
+
         if isinstance(self._shape, dict):
             dists = {}
             for name, shape in self._shape.items():
                 mean = self.mean_layer[name](out)
+
+                # Either std is learned or fixed
                 if self._std == "learned":
                     std = self.std_layer[name](out)
                 else:
@@ -674,6 +843,8 @@ class MLP(nn.Module):
             return dists
         else:
             mean = self.mean_layer(out)
+
+            # Either std is learned or fixed
             if self._std == "learned":
                 std = self.std_layer(out)
             else:
@@ -681,6 +852,8 @@ class MLP(nn.Module):
             return self.dist(self._dist, mean, std, self._shape)
 
     def dist(self, dist, mean, std, shape):
+        # Create a distribution based on mean and std and distribution parameters.
+
         if dist == "tanh_normal":
             mean = torch.tanh(mean)
             std = F.softplus(std) + self._min_std
@@ -740,10 +913,16 @@ class MLP(nn.Module):
 
 
 class GRUCell(nn.Module):
+    """
+    Gated Recurrent Unit (GRU) cell is the sequence model that takes in the previous recurrent state, the stochastic representation and an action
+    and returns the next recurrent state.
+
+    This is used alongside the dynamic model to predict the next state of the environment.
+    """
     def __init__(self, inp_size, size, norm=True, act=torch.tanh, update_bias=-1):
         super(GRUCell, self).__init__()
-        self._inp_size = inp_size
-        self._size = size
+        self._inp_size = inp_size # Size of the input to the GRU cell.
+        self._size = size # Size of the recurrent state.
         self._act = act
         self._update_bias = update_bias
         self.layers = nn.Sequential()
@@ -758,17 +937,25 @@ class GRUCell(nn.Module):
         return self._size
 
     def forward(self, inputs, state):
-        state = state[0]  # Keras wraps the state in a list.
+        # The state is the concatenation of the previous recurrent state and the stochastic representation.
+        state = state[0]  # Keras wraps the state in a list get first and only element.
         parts = self.layers(torch.cat([inputs, state], -1))
+
+        # GRU produces reset gate, candidate state and update gates.
         reset, cand, update = torch.split(parts, [self._size] * 3, -1)
         reset = torch.sigmoid(reset)
         cand = self._act(reset * cand)
         update = torch.sigmoid(update + self._update_bias)
+
+        # Gated update using previous state and current state.
         output = update * cand + (1 - update) * state
         return output, [output]
 
 
 class Conv2dSamePad(torch.nn.Conv2d):
+    """
+    Specialized Conv2d layer that calculates the padding needed to keep the input and output size the same.
+    """
     def calc_same_pad(self, i, k, s, d):
         return max((math.ceil(i / s) - 1) * s + (k - 1) * d + 1 - i, 0)
 

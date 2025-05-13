@@ -793,12 +793,26 @@ def args_type(default):
 
 
 def static_scan(fn, inputs, start):
+    """
+    Interesting function. It performs a sequential operation over the time dimension of the inputs applying
+    a function fn to the inputs and concatenating the output along the time dimension. We unsqueeze the output to add a new
+    dimension at the beginning representing the time dimension.
+
+    The function handles the case when the inputs are dictionaries or lists of dictionaries. 
+    """    
     last = start
     indices = range(inputs[0].shape[0])
     flag = True
+
+    # The indices here are the time steps of the inputs
     for index in indices:
+        # For each input retrieve the value from the relevant time step
         inp = lambda x: (_input[x] for _input in inputs)
+
+        # Update the state using the function fn and the inputs
         last = fn(last, *inp(index))
+
+        # If this is the first iteration, initialize the outputs
         if flag:
             if type(last) == type({}):
                 outputs = {
@@ -817,12 +831,15 @@ def static_scan(fn, inputs, start):
                     else:
                         outputs.append(_last.clone().unsqueeze(0))
             flag = False
+
         else:
+            # The function concatenates new outputs with the previous ones along the time dimension
             if type(last) == type({}):
                 for key in last.keys():
                     outputs[key] = torch.cat(
                         [outputs[key], last[key].unsqueeze(0)], dim=0
                     )
+
             else:
                 for j in range(len(outputs)):
                     if type(last[j]) == type({}):

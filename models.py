@@ -9,7 +9,19 @@ to_np = lambda x: x.detach().cpu().numpy()
 
 
 class RewardEMA:
-    """running mean and std"""
+    """
+    running mean and std
+
+    We normalise returns since different environments have different reward scales.
+    
+    The return distribution can be muliti-modal and include outliers. Normalising by smallest and largest observed returns
+    would scale returns down too much. For robustness, against outliers and multi-modality, we use the 5th and 95th percentiles.
+    EMA is used to smooth the estimate.
+
+    Why use EMA? 
+    We expect the distribution of returns to change over time as the agent learns. For example, larger positive rewards should
+    be observed more frequently. 
+    """
 
     def __init__(self, device, alpha=1e-2):
         self.device = device
@@ -17,11 +29,13 @@ class RewardEMA:
         self.range = torch.tensor([0.05, 0.95], device=device)
 
     def __call__(self, x, ema_vals):
-        flat_x = torch.flatten(x.detach())
-        x_quantile = torch.quantile(input=flat_x, q=self.range)
+
+        flat_x = torch.flatten(x.detach()) # Return distribution
+        x_quantile = torch.quantile(input=flat_x, q=self.range) 
+
         # this should be in-place operation
         ema_vals[:] = self.alpha * x_quantile + (1 - self.alpha) * ema_vals
-        scale = torch.clip(ema_vals[1] - ema_vals[0], min=1.0)
+        scale = torch.clip(ema_vals[1] - ema_vals[0], min=1.0) # Do not divide by anything smaller than 1.0
         offset = ema_vals[0]
         return offset.detach(), scale.detach()
 
@@ -30,9 +44,13 @@ class WorldModel(nn.Module):
     def __init__(self, obs_space, act_space, step, config):
         super(WorldModel, self).__init__()
         self._step = step
+
+        # Automatic Mixed Precision - improves efficiency deciding which operations to use FP16 or FP32
         self._use_amp = True if config.precision == 16 else False
+
         self._config = config
         shapes = {k: tuple(v.shape) for k, v in obs_space.spaces.items()}
+
         self.encoder = networks.MultiEncoder(shapes, **config.encoder)
         self.embed_size = self.encoder.outdim
         self.dynamics = networks.RSSM(
@@ -215,6 +233,8 @@ class WorldModel(nn.Module):
 class ImagBehavior(nn.Module):
     def __init__(self, config, world_model):
         super(ImagBehavior, self).__init__()
+
+        # Automatic Mixed Precision - improves efficiency deciding which operations to use FP16 or FP32
         self._use_amp = True if config.precision == 16 else False
         self._config = config
         self._world_model = world_model
