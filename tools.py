@@ -137,7 +137,9 @@ def simulate(
     episodes=0,
     state=None,
 ):
-    # TODO: understand
+    # Used to actually interact with the environment and gather data
+    # also used for evaluating learned models
+
     # initialize or unpack simulation state
     if state is None:
         step, episode = 0, 0
@@ -146,10 +148,13 @@ def simulate(
         obs = [None] * len(envs)
         agent_state = None
         reward = [0] * len(envs)
+
     else:
         step, episode, done, length, obs, agent_state, reward = state
+
     while (steps and step < steps) or (episodes and episode < episodes):
         # reset envs if necessary
+        # if any environment is flagged as done, reset environment and set initial rewards and discount
         if done.any():
             indices = [index for index, d in enumerate(done) if d]
             results = [envs[i].reset() for i in indices]
@@ -164,18 +169,25 @@ def simulate(
                 add_to_cache(cache, envs[index].id, t)
                 # replace obs with done by initial state
                 obs[index] = result
-        # step agents
+
+        # step agents, sample actions in each environment
         obs = {k: np.stack([o[k] for o in obs]) for k in obs[0] if "log_" not in k}
+
+        # by calling agent here we are actually first training the agent (if training=true)
+        # then we evaluate the policy on the observations
         action, agent_state = agent(obs, done, agent_state)
         if isinstance(action, dict):
             action = [
                 {k: np.array(action[k][i].detach().cpu()) for k in action}
                 for i in range(len(envs))
             ]
+
         else:
             action = np.array(action)
+
         assert len(action) == len(envs)
-        # step envs
+
+        # step envs, for each env perform action
         results = [e.step(a) for e, a in zip(envs, action)]
         results = [r() for r in results]
         obs, reward, done = zip(*[p[:3] for p in results])
@@ -184,9 +196,11 @@ def simulate(
         done = np.stack(done)
         episode += int(done.sum())
         length += 1
+        # increment step count by number of envs
         step += len(envs)
         length *= 1 - done
-        # add to cache
+
+        # add to cache, save the results from each environment to the cache
         for a, result, env in zip(action, results, envs):
             o, r, d, info = result
             o = {k: convert(v) for k, v in o.items()}
@@ -203,6 +217,7 @@ def simulate(
             indices = [index for index, d in enumerate(done) if d]
             # logging for done episode
             for i in indices:
+                # save done episode
                 save_episodes(directory, {envs[i].id: cache[envs[i].id]})
                 length = len(cache[envs[i].id]["reward"]) - 1
                 score = float(np.array(cache[envs[i].id]["reward"]).sum())
@@ -217,12 +232,14 @@ def simulate(
                         cache[envs[i].id].pop(key)
 
                 if not is_eval:
+                    # erase episodes if we are over a limit
                     step_in_dataset = erase_over_episodes(cache, limit)
                     logger.scalar(f"dataset_size", step_in_dataset)
                     logger.scalar(f"train_return", score)
                     logger.scalar(f"train_length", length)
                     logger.scalar(f"train_episodes", len(cache))
                     logger.write(step=logger.step)
+
                 else:
                     if not "eval_lengths" in locals():
                         eval_lengths = []
@@ -328,7 +345,7 @@ def sample_episodes(episodes, length, seed=0):
         ret = None
         p = np.array(
             [len(next(iter(episode.values()))) for episode in episodes.values()]
-        )
+        ) # probability of an episode being chosen is proportional to its length
         p = p / np.sum(p)
         while size < length:
             episode = np_random.choice(list(episodes.values()), p=p)
@@ -337,15 +354,22 @@ def sample_episodes(episodes, length, seed=0):
             if total < 2:
                 continue
             if not ret:
+                # randomly extract a slice of an episode with size length (cut off if near the end of the episode)
                 index = int(np_random.randint(0, total - 1))
                 ret = {
                     k: v[index : min(index + length, total)].copy()
                     for k, v in episode.items()
                     if "log_" not in k
                 }
+
+                # We mark the index at the start of the episode segment
                 if "is_first" in ret:
                     ret["is_first"][0] = True
+
             else:
+                # This case happens when we slice a episode too close to the end we still need to sample
+                # the correct number of transitions, so we take the remaining amount from the front of the episode
+
                 # 'is_first' comes after 'is_last'
                 index = 0
                 possible = length - size
@@ -356,6 +380,8 @@ def sample_episodes(episodes, length, seed=0):
                     for k, v in episode.items()
                     if "log_" not in k
                 }
+
+                # We mark the index of the additional episode segment
                 if "is_first" in ret:
                     ret["is_first"][size] = True
             size = len(next(iter(ret.values())))

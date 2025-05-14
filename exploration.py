@@ -38,6 +38,12 @@ class Random(nn.Module):
 
 
 class Plan2Explore(nn.Module):
+    """
+    Plan2Explore learns a latent‑dynamics “world model” directly from pixels, then plans inside that model to visit states it expects will be novel.
+    Novelty is quantified as the ensemble disagreement of one‑step latent predictors, a differentiable proxy for expected information‑gain.
+    Because the exploration policy is trained entirely in imagination (Dreamer), the agent can collect data that maximally improves its model with far fewer real interactions. 
+    Once exploration ends, the same world model lets the agent solve many unseen tasks zero‑shot or with a few fine‑tuning episodes.
+    """
     def __init__(self, config, world_model, reward):
         super(Plan2Explore, self).__init__()
         self._config = config

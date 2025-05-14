@@ -252,6 +252,16 @@ def make_env(config, mode, id):
 
 
 def main(config):
+    """
+    Training of dreamer happens with a small initial dataset of episodes (gathered potentially with a random policy).
+    We create environments, initialise the dreamer agent and simulate interactions in those environemnts. 
+    
+    In the simulation, everytime we call the agent to produce the next action given observations, it first trains itself (world model, actor and critic)
+    from batches sampled from the training dataset of episodes.
+
+    New episodes are generated from the simulation and saved, so, over time, the training dataset grows and grows.
+    HOWEVER: it does not appear that this training dataset is accessible to the agent unless we reinitilise it.
+    """
     # setup config parameters and logging
     tools.set_seed_everywhere(config.seed)
     if config.deterministic_run:
@@ -272,6 +282,7 @@ def main(config):
     # step in logger is environmental step
     logger = tools.Logger(logdir, config.action_repeat * step)
 
+    # ----- Create environments + load episodes -----
     print("Create envs.")
     # if we have a dataset of episodes from disk load them 
     if config.offline_traindir:
@@ -305,6 +316,7 @@ def main(config):
     print("Action Space", acts)
     config.num_actions = acts.n if hasattr(acts, "n") else acts.shape[0]
 
+    # ------ create episodes ----- 
     # if we do not have a dataset of episodes then we create a dataset using a completely random
     # policy
     state = None
@@ -345,6 +357,7 @@ def main(config):
     print("Simulate agent.")
     train_dataset = make_dataset(train_eps, config)
     eval_dataset = make_dataset(eval_eps, config)
+
     agent = Dreamer(
         train_envs[0].observation_space,
         train_envs[0].action_space,
@@ -366,6 +379,7 @@ def main(config):
         logger.write()
         if config.eval_episode_num > 0:
             print("Start evaluation.")
+            # use dreamer in eval mode 
             eval_policy = functools.partial(agent, training=False)
             tools.simulate(
                 eval_policy,
