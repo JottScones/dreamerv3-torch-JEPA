@@ -11,13 +11,22 @@ import tools
 
 
 class RSSM(nn.Module):
+    """
+    RSSM holds the logic regarding updating the model state: the recurrent state and the stochastic latent variable.
+
+    It does this via two main paths:
+        1. Observation path: where we use the observation network to update model state given the previous state, action and sensory input. 
+        2. Imagination path: where we use the imagination network to predict the next model state of the model given the previous state and action.
+    
+    The main difference being where the stochastic latent variable comes from, either from input or from the new recurrent state. 
+    """
     def __init__(
         self,
         stoch=30, # Number of stochastic latent variables
         deter=200, # The recurrent state
         hidden=200, # Number of hidden units in the GRU cell
         rec_depth=1,
-        discrete=False,
+        discrete=False, # If stochastic distribution is categorical or normal
         act="SiLU",
         norm=True,
         mean_act="none",
@@ -191,6 +200,7 @@ class RSSM(nn.Module):
         return prior
 
     def get_feat(self, state):
+        # produce the model state by concatenating the stochastic and recurrent state.
         stoch = state["stoch"]
         if self._discrete:
             shape = list(stoch.shape[:-2]) + [self._stoch * self._discrete]
@@ -239,7 +249,7 @@ class RSSM(nn.Module):
                     val * (1.0 - is_first_r) + init_state[key] * is_first_r
                 )
 
-        # Calculate the recurrent state h_t.
+        # Calculate the recurrent state h_t and use that to predict z_t (prior).
         prior = self.img_step(prev_state, prev_action)
 
         # Concatenate the recurrent state with the embedding of the visual and vector inputs (sensory input x_t).
@@ -290,6 +300,7 @@ class RSSM(nn.Module):
             deter = prev_state["deter"]
             # (batch, hidden), (batch, deter) -> (batch, deter), (batch, deter)
             x, deter = self._cell(x, [deter])
+            # Weird but both x and deter are the same value after the forward pass.
             deter = deter[0]  # Keras wraps the state in a list.
 
         # Pass recurrent state through a linear layer to produce the output of the GRU cell.
@@ -355,8 +366,10 @@ class RSSM(nn.Module):
     def kl_loss(self, post, prior, free, dyn_scale, rep_scale):
         kld = torchd.kl.kl_divergence
         dist = lambda x: self.get_dist(x)
+        # Stop gradient 
         sg = lambda x: {k: v.detach() for k, v in x.items()}
 
+        # Calculate the KL divergence between the posterior (encoder) and prior distributions (dynamics predictor).
         rep_loss = value = kld(
             dist(post) if self._discrete else dist(post)._dist,
             dist(sg(prior)) if self._discrete else dist(sg(prior))._dist,
@@ -366,6 +379,7 @@ class RSSM(nn.Module):
             dist(prior) if self._discrete else dist(prior)._dist,
         )
         # this is implemented using maximum at the original repo as the gradients are not backpropagated for the out of limits.
+        # we clip the loss if they are minimised well enough already - to avoid degenerate solutions.
         rep_loss = torch.clip(rep_loss, min=free)
         dyn_loss = torch.clip(dyn_loss, min=free)
         loss = dyn_scale * dyn_loss + rep_scale * rep_loss

@@ -693,16 +693,23 @@ def lambda_return(reward, value, pcont, bootstrap, lambda_, axis):
     # Setting lambda=0 gives a fixed 1-step return.
     # assert reward.shape.ndims == value.shape.ndims, (reward.shape, value.shape)
     assert len(reward.shape) == len(value.shape), (reward.shape, value.shape)
+
+    # pcont is the discount factor, make it a tensor that matches the length fo the reward.
     if isinstance(pcont, (int, float)):
         pcont = pcont * torch.ones_like(reward)
+
+    # Permute tensors to the timne dimension is in front
     dims = list(range(len(reward.shape)))
     dims = [axis] + dims[1:axis] + [0] + dims[axis + 1 :]
     if axis != 0:
         reward = reward.permute(dims)
         value = value.permute(dims)
         pcont = pcont.permute(dims)
+
     if bootstrap is None:
         bootstrap = torch.zeros_like(value[-1])
+
+    
     next_values = torch.cat([value[1:], bootstrap[None]], 0)
     inputs = reward + pcont * next_values * (1 - lambda_)
     # returns = static_scan(
@@ -747,18 +754,31 @@ class Optimizer:
         self._scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     def __call__(self, loss, params, retain_graph=True):
+        # assert loss is a scalar
         assert len(loss.shape) == 0, loss.shape
+
         metrics = {}
         metrics[f"{self._name}_loss"] = loss.detach().cpu().numpy()
+
+        # Zero out gradients from previous step
         self._opt.zero_grad()
+
+        # Compute new gradients, scaling is for handling mixed precision
         self._scaler.scale(loss).backward(retain_graph=retain_graph)
         self._scaler.unscale_(self._opt)
+
         # loss.backward(retain_graph=retain_graph)
+        # Clip gradients to prevent exploding gradients
         norm = torch.nn.utils.clip_grad_norm_(params, self._clip)
+        
+        # Apply weight decay if specified
         if self._wd:
             self._apply_weight_decay(params)
+            
+        # Update parameters and handle mixed precision
         self._scaler.step(self._opt)
         self._scaler.update()
+
         # self._opt.step()
         self._opt.zero_grad()
         metrics[f"{self._name}_grad_norm"] = to_np(norm)
