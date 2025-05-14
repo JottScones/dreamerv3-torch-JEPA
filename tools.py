@@ -137,6 +137,7 @@ def simulate(
     episodes=0,
     state=None,
 ):
+    # TODO: understand
     # initialize or unpack simulation state
     if state is None:
         step, episode = 0, 0
@@ -709,7 +710,7 @@ def lambda_return(reward, value, pcont, bootstrap, lambda_, axis):
     if bootstrap is None:
         bootstrap = torch.zeros_like(value[-1])
 
-    
+
     next_values = torch.cat([value[1:], bootstrap[None]], 0)
     inputs = reward + pcont * next_values * (1 - lambda_)
     # returns = static_scan(
@@ -877,6 +878,9 @@ def static_scan(fn, inputs, start):
 
 
 class Every:
+    """
+    only return 1 first call and then at steps which are "every" apart
+    """
     def __init__(self, every):
         self._every = every
         self._last = None
@@ -887,6 +891,8 @@ class Every:
         if self._last is None:
             self._last = step
             return 1
+
+        # O if steps since last is < every
         count = int((step - self._last) / self._every)
         self._last += self._every * count
         return count
