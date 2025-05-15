@@ -157,7 +157,7 @@ class Atari:
         )
 
     def _screen(self, array):
-        self._ale.getScreenRGB2(array)
+        self._ale.getScreenRGB(array)
 
     def close(self):
         return self._env.close()
