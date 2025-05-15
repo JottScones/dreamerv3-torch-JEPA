@@ -16,7 +16,7 @@ class Atari:
         lives="unused",
         sticky=True,
         actions="all",
-        length=108000,
+        length=108000, # Max length of an episode
         resize="opencv",
         seed=None,
     ):
