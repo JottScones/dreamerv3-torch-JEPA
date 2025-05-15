@@ -22,7 +22,7 @@
 #! Note that the job submission script will enforce no more than 32 cpus per GPU.
 #SBATCH --gres=gpu:1
 #! How much wallclock time will be required?
-#SBATCH --time=7:00:00
+#SBATCH --time=24:00:00
 #! What types of email messages do you wish to receive?
 #SBATCH --mail-type=NONE
 #! Uncomment this to prevent the job from being requeued (e.g. if
@@ -37,7 +37,7 @@
 #! ######################################################################################
 #! ######################################################################################
 #! set configurations in run.py, e.g. options="--train_json=train_fbank.json --lr=0.01":
-options="--dataset ogbn-arxiv_hyp"
+options="--configs atari100k --logdir ./logdir/baseline_atari_pong"
 
 #! ######################################################################################
 #! ######################################################################################
@@ -60,11 +60,11 @@ module purge                               # Removes all modules still loaded
 module load rhel8/default-amp              # REQUIRED - loads the basic environment
 
 source /home/${USER}/.bashrc
-source /rds/user/swj24/hpc-work/MLMI4-GAT-Replication/GATenv/bin/activate
+source /rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/bin/activate
 #! Insert additional module load commands after this line if needed:
 
 #! Full path to application executable: 
-application="python -u launcher.py"
+application="python -u dreamer.py"
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
