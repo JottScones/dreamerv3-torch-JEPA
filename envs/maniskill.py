@@ -47,10 +47,11 @@ class ManiSkill:
         return space
 
     def step(self, action):
-        raw_obs, reward, done, info = self._env.step(action)
+        res = self._env.step(action)
+        raw_obs, reward, done, truncated, info = res
 
         obs = dict()
-        obs["image"] = obs["sensor_data"]["base_camera"]["rgb"]
+        obs["image"] = raw_obs["sensor_data"]["base_camera"]["rgb"]
         obs["is_first"] = False
         obs["is_last"] = done
         obs["is_terminal"] = info.get("success", False)
