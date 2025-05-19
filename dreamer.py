@@ -240,6 +240,12 @@ def make_env(config, mode, id):
 
         env = minecraft.make_env(task, size=config.size, break_speed=config.break_speed)
         env = wrappers.OneHotAction(env)
+
+    elif suite == "maniskill":
+        import envs.maniskill as maniskill
+        env = maniskill.ManiSkill(task=task, seed=config.seed + id, size=config.size, control_mode=config.control_mode)
+        env = wrappers.OneHotAction(env)
+
     else:
         raise NotImplementedError(suite)
     env = wrappers.TimeLimit(env, config.time_limit)
@@ -297,7 +303,7 @@ def main(config):
     eval_eps = tools.load_episodes(directory, limit=1)
     make = lambda mode, id: make_env(config, mode, id)
 
-    # we might have nultiple environments so we can collect data in parallel
+    # we might have multiple environments so we can collect data in parallel
     train_envs = [make("train", i) for i in range(config.envs)]
     eval_envs = [make("eval", i) for i in range(config.envs)]
 

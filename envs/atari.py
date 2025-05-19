@@ -3,6 +3,9 @@ import numpy as np
 
 
 class Atari:
+    # Eval env: ~12,973,739 images
+    # PONG: The first player or team to score 21 points wins the game.
+
     LOCK = None
     metadata = {}
 
