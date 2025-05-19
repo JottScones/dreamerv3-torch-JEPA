@@ -60,7 +60,7 @@ class ManiSkill:
         raw_obs, info = self._env.reset(seed=self._seed)
 
         obs = dict()
-        obs["image"] = raw_obs["sensor_data"]["base_camera"]["rgb"]
+        obs["image"] = raw_obs["sensor_data"]["base_camera"]["rgb"].detach().cpu()
         obs["is_first"] = True
         obs["is_last"] = False
         obs["is_terminal"] = False
