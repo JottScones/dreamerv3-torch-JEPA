@@ -6,14 +6,13 @@ class ManiSkill:
         # 9x9, 11x11, 13x13 and 15x15 are available
         self._env = gym.make(
             task, # there are more tasks e.g. "PushCube-v1", "PegInsertionSide-v1", ...
-            sensor_configs=dict(width=224, height=224),
+            sensor_configs=dict(width=size[0], height=size[1]),
             num_envs=1,
             obs_mode="rgb", # there is also "state_dict", "rgbd", ...
             control_mode=control_mode, # there is also "pd_joint_delta_pos", ...
-            seed=seed
-
         )
         self._obs_is_dict = hasattr(self._env.observation_space, "spaces")
+        self._seed = seed
         self._obs_key = obs_key
         self._act_key = act_key
         self._size = size
@@ -58,7 +57,7 @@ class ManiSkill:
         return obs, reward, done, info
 
     def reset(self):
-        obs = self._env.reset()
+        obs = self._env.reset(seed=self._seed)
         if not self._obs_is_dict:
             obs = {self._obs_key: obs}
         obs["is_first"] = True
