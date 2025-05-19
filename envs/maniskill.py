@@ -51,15 +51,19 @@ class ManiSkill:
         obs, reward, done, info = self._env.step(action)
         if not self._obs_is_dict:
             obs = {self._obs_key: obs}
+
+        obs["image"] = obs["sensor_data"]["base_camera"]["rgb"]
         obs["is_first"] = False
         obs["is_last"] = done
         obs["is_terminal"] = info.get("is_terminal", False)
         return obs, reward, done, info
 
     def reset(self):
-        obs = self._env.reset(seed=self._seed)
+        obs, info = self._env.reset(seed=self._seed)
         if not self._obs_is_dict:
             obs = {self._obs_key: obs}
+
+        obs["image"] = obs["sensor_data"]["base_camera"]["rgb"]
         obs["is_first"] = True
         obs["is_last"] = False
         obs["is_terminal"] = False
