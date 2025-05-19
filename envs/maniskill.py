@@ -1,5 +1,5 @@
-import gym
 import mani_skill.envs
+import gymnasium as gym
 
 class ManiSkill:
     def __init__(self, task="PushT-v1", obs_key="image", act_key="action", size=(64, 64), seed=0, control_mode="pd_joint_delta_pos"):
