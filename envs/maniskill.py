@@ -11,7 +11,6 @@ class ManiSkill:
             obs_mode="rgb", # there is also "state_dict", "rgbd", ...
             control_mode=control_mode, # there is also "pd_joint_delta_pos", ...
         )
-        self._obs_is_dict = hasattr(self._env.observation_space, "spaces")
         self._seed = seed
         self._obs_key = obs_key
         self._act_key = act_key
@@ -48,22 +47,20 @@ class ManiSkill:
         return space
 
     def step(self, action):
-        obs, reward, done, info = self._env.step(action)
-        if not self._obs_is_dict:
-            obs = {self._obs_key: obs}
+        raw_obs, reward, done, info = self._env.step(action)
 
+        obs = dict()
         obs["image"] = obs["sensor_data"]["base_camera"]["rgb"]
         obs["is_first"] = False
         obs["is_last"] = done
-        obs["is_terminal"] = info.get("is_terminal", False)
+        obs["is_terminal"] = info.get("success", False)
         return obs, reward, done, info
 
     def reset(self):
-        obs, info = self._env.reset(seed=self._seed)
-        if not self._obs_is_dict:
-            obs = {self._obs_key: obs}
+        raw_obs, info = self._env.reset(seed=self._seed)
 
-        obs["image"] = obs["sensor_data"]["base_camera"]["rgb"]
+        obs = dict()
+        obs["image"] = raw_obs["sensor_data"]["base_camera"]["rgb"]
         obs["is_first"] = True
         obs["is_last"] = False
         obs["is_terminal"] = False
