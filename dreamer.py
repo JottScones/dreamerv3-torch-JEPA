@@ -244,7 +244,7 @@ def make_env(config, mode, id):
     elif suite == "maniskill":
         import envs.maniskill as maniskill
         env = maniskill.ManiSkill(task=task, seed=config.seed + id, size=config.size, control_mode=config.control_mode)
-        env = wrappers.OneHotAction(env)
+        env = wrappers.NormalizeActions(env)
 
     else:
         raise NotImplementedError(suite)
