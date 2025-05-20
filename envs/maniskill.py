@@ -28,10 +28,8 @@ class ManiSkill:
 
     @property
     def observation_space(self):
-        if self._obs_is_dict:
-            spaces = self._env.observation_space.spaces.copy()
-        else:
-            spaces = {self._obs_key: self._env.observation_space}
+        spaces = self._env.observation_space.spaces.copy()
+
         return gym.spaces.Dict(
             {
                 **spaces,
