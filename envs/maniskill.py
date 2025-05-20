@@ -80,40 +80,5 @@ class ManiSkill:
         obs["is_terminal"] = np.zeros(self.num_envs, dtype=bool)
         return obs
 """
-Action Space Box(-1.0, 1.0, (7,), float32)
-Prefill dataset (2500 steps).
-Traceback (most recent call last):
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 460, in <module>
-    main(parser.parse_args(remaining))
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 353, in main
-    state = simulate_fn(
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/tools.py", line 325, in simulate_vector
-    next_obs, reward, terminated, truncated, info = env.step(act_np)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/gym/core.py", line 280, in step
-    return self.env.step(action)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/envs/wrappers.py", line 105, in step
-    return self.env.step(action[self._key])
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/envs/wrappers.py", line 15, in step
-    obs, reward, done, info = self.env.step(action)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/envs/wrappers.py", line 44, in step
-    return self.env.step(original)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/envs/maniskill.py", line 56, in step
-    res = self._env.step(action)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/mani_skill/vector/wrappers/gymnasium.py", line 112, in step
-    obs, rew, terminations, truncations, infos = self._env.step(actions)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/mani_skill/utils/registration.py", line 161, in step
-    observation, reward, terminated, truncated, info = self.env.step(action)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/gymnasium/wrappers/order_enforcing.py", line 56, in step
-    return self.env.step(action)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/mani_skill/envs/sapien_env.py", line 948, in step
-    action = self._step_action(action)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/mani_skill/envs/sapien_env.py", line 1010, in _step_action
-    self.agent.set_action(action)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/mani_skill/agents/base_agent.py", line 324, in set_action
-    self.controller.set_action(action)
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/mani_skill/agents/controllers/base_controller.py", line 294, in set_action
-    assert action.shape == (
-AssertionError: Received action of shape torch.Size([1, 7]) but expected shape (8, 7)
-Segmentation fault
-"""
 
+"""

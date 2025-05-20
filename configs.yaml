@@ -262,7 +262,11 @@ maniskill:
   size: [256, 256]
   video_pred_log: True
   vector_env: True
-  num_vector_envs: 8
+  num_vector_envs: 128
+  time_limit: 100
+  batch_size: 32
+  batch_length: 20
+  train_ratio: 512
 
 debug:
   debug: True
