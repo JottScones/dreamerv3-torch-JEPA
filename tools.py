@@ -322,10 +322,10 @@ def simulate_vector(
             act_np = np.asarray(action)
 
         # 3) Environment step (B environments at once)
-        next_obs, reward, done, info = env.step(act_np)
+        next_obs, reward, pre_done, info = env.step(act_np)
 
         # 4) Book-keeping ------------------------------------------------------
-        done = np.array(done)
+        done = np.array(pre_done)
         episode += int(done.sum())
         step += num_envs
         length += 1
