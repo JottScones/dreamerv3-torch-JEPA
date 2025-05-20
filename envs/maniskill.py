@@ -29,6 +29,11 @@ class ManiSkill:
 
     @property
     def observation_space(self):
+        spaces = self._env.observation_space.spaces.copy()
+        views = spaces["sensor_data"]["base_camera"]["rgb"]
+        if views.shape[0] > 1:
+            print(f"multiple views are not yet supported")
+
         return gym.spaces.Dict(
             {
                 "image": gym.spaces.Box(0, 255, self._size + (3,), dtype=np.uint8),
@@ -52,7 +57,7 @@ class ManiSkill:
         done = done.squeeze()
 
         obs = dict()
-        obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"])
+        obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"].squeeze(0))
         obs["is_first"] = False
         obs["is_last"] = done
         obs["is_terminal"] = info.get("success", False)
@@ -62,26 +67,26 @@ class ManiSkill:
         raw_obs, info = self._env.reset(seed=self._seed)
 
         obs = dict()
-        obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"])
+        obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"].squeeze(0))
         obs["is_first"] = True
         obs["is_last"] = False
         obs["is_terminal"] = False
         return obs
 
 """
-Logdir logdir/test_maniskill
-Create envs.
-/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/sapien/_vulkan_tricks.py:37: UserWarning: Failed to find Vulkan ICD file. This is probably due to an incorrect or partial installation of the NVIDIA driver. SAPIEN will attempt to provide an ICD file anyway but it may not work.
-  warn(
-Action Space Box(-1.0, 1.0, (7,), float32)
-Prefill dataset (2500 steps).
 Traceback (most recent call last):
   File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 458, in <module>
     main(parser.parse_args(remaining))
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 351, in main
-    state = tools.simulate(
-  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/tools.py", line 201, in simulate
-    length *= 1 - done
-ValueError: non-broadcastable output operand with shape (1,) doesn't match the broadcast shape (1,1)
+  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 390, in main
+    tools.simulate(
+  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/tools.py", line 178, in simulate
+    action, agent_state = agent(obs, done, agent_state)
+  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 92, in __call__
+    policy_output, state = self._policy(obs, state, training)
+  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 111, in _policy
+    latent, _ = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"])
+  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/networks.py", line 256, in obs_step
+    x = torch.cat([prior["deter"], embed], -1)
+RuntimeError: Tensors must have same number of dimensions: got 2 and 3
 """
 
