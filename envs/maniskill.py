@@ -12,6 +12,7 @@ class ManiSkill:
             num_envs=1,
             obs_mode="rgb", # there is also "state_dict", "rgbd", ...
             control_mode=control_mode, # there is also "pd_joint_delta_pos", ...
+            sim_backend="physx_cuda"
         )
         self._seed = seed
         self._obs_key = obs_key
