@@ -54,14 +54,14 @@ class ManiSkill:
         res = self._env.step(action)
         raw_obs, reward, done, truncated, info = res
 
-        reward = reward.squeeze()
-        done = done.squeeze()
+        reward = reward.squeeze().cpu()
+        done = done.squeeze().cpu()
 
         obs = dict()
         obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"].squeeze(0))
         obs["is_first"] = False
         obs["is_last"] = done
-        obs["is_terminal"] = info["success"].squeeze() if "success" in info else False
+        obs["is_terminal"] = info["success"].squeeze().cpu() if "success" in info else False
         return obs, reward, done, info
 
     def reset(self):
