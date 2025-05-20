@@ -373,13 +373,24 @@ def sample_episodes(episodes, length, seed=0):
                 # 'is_first' comes after 'is_last'
                 index = 0
                 possible = length - size
-                ret = {
-                    k: np.append(
-                        ret[k], v[index : min(index + possible, total)].copy(), axis=0
-                    )
-                    for k, v in episode.items()
-                    if "log_" not in k
-                }
+                try:
+                    ret = {
+                        k: np.append(
+                            ret[k], v[index : min(index + possible, total)].copy(), axis=0
+                        )
+                        for k, v in episode.items()
+                        if "log_" not in k
+                    }
+                except ValueError as e:
+                    for k, v in episode.items():
+                        print("----")
+                        print(ret[k].shape)
+                        print(ret[k])
+                        print('+++++')
+                        temp = v[index : min(index + possible, total)]
+                        print(temp.shape)
+                        print(temp)
+                    raise e
 
                 # We mark the index of the additional episode segment
                 if "is_first" in ret:
