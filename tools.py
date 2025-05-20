@@ -332,7 +332,6 @@ def simulate_vector(
         length *= 1 - done                      # reset per-env
 
         # 5) Store transitions -------------------------------------------------
-        print(done)
         for i in range(num_envs):
             trans = {k: convert(next_obs[k][i]) for k in next_obs}
             if isinstance(act_np, dict):
