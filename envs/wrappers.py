@@ -21,9 +21,9 @@ class TimeLimit(gym.Wrapper):
             self._step = None
         return obs, reward, done, info
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         self._step = 0
-        return self.env.reset()
+        return self.env.reset(*args, **kwargs)
 
 
 class NormalizeActions(gym.Wrapper):
@@ -62,8 +62,8 @@ class OneHotAction(gym.Wrapper):
             raise ValueError(f"Invalid one-hot action:\n{action}")
         return self.env.step(index)
 
-    def reset(self):
-        return self.env.reset()
+    def reset(self, *args, **kwargs):
+        return self.env.reset(*args, **kwargs)
 
     def _sample_action(self):
         actions = self.env.action_space.n
@@ -89,8 +89,8 @@ class RewardObs(gym.Wrapper):
             obs["obs_reward"] = np.array([reward], dtype=np.float32)
         return obs, reward, done, info
 
-    def reset(self):
-        obs = self.env.reset()
+    def reset(self, *args, **kwargs):
+        obs = self.env.reset(*args, **kwargs)
         if "obs_reward" not in obs:
             obs["obs_reward"] = np.array([0.0], dtype=np.float32)
         return obs
@@ -111,7 +111,7 @@ class UUID(gym.Wrapper):
         timestamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
         self.id = f"{timestamp}-{str(uuid.uuid4().hex)}"
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         timestamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
         self.id = f"{timestamp}-{str(uuid.uuid4().hex)}"
-        return self.env.reset()
+        return self.env.reset(*args, **kwargs)
