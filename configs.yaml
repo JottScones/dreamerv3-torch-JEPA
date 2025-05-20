@@ -252,14 +252,17 @@ memorymaze:
   task: "memorymaze_9x9"
 
 maniskill:
-  steps: 5e7
+  parallel: True
+  steps: 1e6
+  envs: 8
   action_repeat: 1
   actor: { dist: "onehot", std: "none" }
   imag_gradient: "reinforce"
   task: "maniskill_PushT-v1"
   control_mode: "pd_joint_delta_pos"
   eval_episode_num: 10
-  size: [64, 64]
+  size: [256, 256]
+  video_pred_log: True
 
 debug:
   debug: True
