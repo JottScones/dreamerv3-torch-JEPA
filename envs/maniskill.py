@@ -55,6 +55,9 @@ class ManiSkill:
     def step(self, action):
         res = self._env.step(action)
         raw_obs, reward, done, truncated, info = res
+
+        print(raw_obs.shape)
+        print(raw_obs)
         
         reward = reward.cpu()
         done = done.cpu()
@@ -72,6 +75,8 @@ class ManiSkill:
 
     def reset(self):
         raw_obs, info = self._env.reset(seed=self._seed)
+        print(raw_obs.shape)
+        print(raw_obs)
 
         obs = []
         for env in range(self._num_envs):
