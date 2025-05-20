@@ -55,7 +55,6 @@ class ManiSkill:
     def step(self, action):
         res = self._env.step(action)
         raw_obs, reward, done, truncated, info = res
-        print(res)
 
         reward = reward.cpu()
         done = done.cpu()

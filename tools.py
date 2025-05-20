@@ -332,16 +332,20 @@ def simulate_vector(
         length *= 1 - done                      # reset per-env
 
         # 5) Store transitions -------------------------------------------------
-        for i in range(num_envs):
-            trans = {k: convert(next_obs[k][i]) for k in next_obs}
-            if isinstance(act_np, dict):
-                for k in act_np:
-                    trans[k] = act_np[k][i]
-            else:
-                trans["action"] = act_np[i]
-            trans["reward"]   = reward[i]
-            trans["discount"] = info.get("discount", 1.0 - float(done[i]))
-            add_to_cache(cache, vector_id(env, i), trans)
+        try:
+            for i in range(num_envs):
+                trans = {k: convert(next_obs[k][i]) for k in next_obs}
+                if isinstance(act_np, dict):
+                    for k in act_np:
+                        trans[k] = act_np[k][i]
+                else:
+                    trans["action"] = act_np[i]
+                trans["reward"]   = reward[i]
+                trans["discount"] = info.get("discount", 1.0 - float(done[i]))
+                add_to_cache(cache, vector_id(env, i), trans)
+        except IndexError as e:
+            print(next_obs, reward, done, info)
+            raise e
 
         # 6) End-of-episode logging & dataset maintenance ----------------------
         if done.any():
