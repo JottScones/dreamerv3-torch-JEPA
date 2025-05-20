@@ -344,7 +344,10 @@ def simulate_vector(
                 trans["discount"] = info.get("discount", 1.0 - float(done[i]))
                 add_to_cache(cache, vector_id(env, i), trans)
         except IndexError as e:
-            print(next_obs, reward, done, info)
+            print(pre_done)
+            print(done)
+            print("+++++++")
+            print(next_obs, reward, info)
             raise e
 
         # 6) End-of-episode logging & dataset maintenance ----------------------
