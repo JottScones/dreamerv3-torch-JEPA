@@ -243,7 +243,7 @@ def make_env(config, mode, id):
 
     elif suite == "maniskill":
         import envs.maniskill as maniskill
-        env = maniskill.ManiSkill(task=task, seed=config.seed + id, size=config.size, control_mode=config.control_mode)
+        env = maniskill.ManiSkill(task=task, seed=config.seed + id, size=config.size, control_mode=config.control_mode, num_envs=config.num_vector_envs)
         env = wrappers.NormalizeActions(env)
 
     else:
@@ -319,6 +319,8 @@ def main(config):
 
     acts = train_envs[0].action_space
 
+    simulate_fn = tools.simulate_vector if config.vector_env else tools.simulate
+
     print("Action Space", acts)
     config.num_actions = acts.n if hasattr(acts, "n") else acts.shape[0]
 
@@ -348,7 +350,7 @@ def main(config):
             logprob = random_actor.log_prob(action)
             return {"action": action, "logprob": logprob}, None
 
-        state = tools.simulate(
+        state = simulate_fn(
             random_agent,
             train_envs,
             train_eps,
@@ -387,7 +389,7 @@ def main(config):
             print("Start evaluation.")
             # use dreamer in eval mode 
             eval_policy = functools.partial(agent, training=False)
-            tools.simulate(
+            simulate_fn(
                 eval_policy,
                 eval_envs,
                 eval_eps,
@@ -401,7 +403,7 @@ def main(config):
                 logger.video("eval_openl", to_np(video_pred))
 
         print("Start training.")
-        state = tools.simulate(
+        state = simulate_fn(
             agent,
             train_envs,
             train_eps,

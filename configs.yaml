@@ -261,6 +261,8 @@ maniskill:
   eval_episode_num: 10
   size: [256, 256]
   video_pred_log: True
+  vector_env: True
+  num_vector_env: 8
 
 debug:
   debug: True

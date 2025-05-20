@@ -266,6 +266,126 @@ def simulate(
             cache.popitem(last=False)
     return (step - steps, episode - episodes, done, length, obs, agent_state, reward)
 
+def simulate_vector(
+    agent,
+    envs,
+    cache,
+    directory,
+    logger,
+    is_eval=False,
+    limit=None,
+    steps=0,
+    episodes=0,
+    state=None,
+):
+    env = envs[0]
+    num_envs = env.num_envs
+    # --- initialise or restore ------------------------------------------------
+    if state is None:
+        step = episode = 0
+        done   = np.ones(num_envs, dtype=bool)   # force a full reset
+        length = np.zeros(num_envs,  dtype=np.int32)
+        obs    = None
+        agent_state = None
+        reward = np.zeros(num_envs, dtype=np.float32)
+    else:
+        step, episode, done, length, obs, agent_state, reward = state
+
+    # -------------------------------------------------------------------------
+    while (steps and step < steps) or (episodes and episode < episodes):
+
+        # 1) Reset only the sub-envs that terminated/truncated last step
+        if done.any():
+            reset_mask = done.copy()                              # shape (B,)
+            if obs is None:                                       # first call
+                obs, _ = env.reset()
+            else:
+                obs, _ = env.reset(options={"reset_mask": reset_mask})
+            # log the initial time-step for every reset env
+            for i in np.where(reset_mask)[0]:
+                first = {k: convert(v[i]) for k, v in obs.items()}
+                first["reward"]   = 0.0
+                first["discount"] = 1.0
+                add_to_cache(cache, env.envs[i].id, first)
+            done[:] = False                                        # clear flags
+
+        # 2) Policy interaction ------------------------------------------------
+        batched_obs = {k: convert(v) for k, v in obs.items()}      # B x …
+        action, agent_state = agent(batched_obs, done, agent_state)
+
+        # convert torch→numpy if necessary
+        if isinstance(action, dict):
+            act_np = {k: np.asarray(v.detach().cpu()) for k, v in action.items()}
+        else:
+            act_np = np.asarray(action)
+
+        # 3) Environment step (B environments at once)
+        next_obs, reward, terminated, truncated, info = env.step(act_np)
+        done = np.logical_or(terminated, truncated)               # episode ends
+
+        # 4) Book-keeping ------------------------------------------------------
+        episode += int(done.sum())
+        step    += num_envs
+        length   = (length + 1) * (1 - done)                      # reset per-env
+
+        # 5) Store transitions -------------------------------------------------
+        for i in range(num_envs):
+            trans = {k: convert(next_obs[k][i]) for k in next_obs}
+            if isinstance(act_np, dict):
+                for k in act_np:
+                    trans[k] = act_np[k][i]
+            else:
+                trans["action"] = act_np[i]
+            trans["reward"]   = reward[i]
+            trans["discount"] = info.get("discount", 1.0 - float(done[i]))
+            add_to_cache(cache, env.envs[i].id, trans)
+
+        # 6) End-of-episode logging & dataset maintenance ----------------------
+        if done.any():
+            for i in np.where(done)[0]:
+                save_episodes(directory, {env.envs[i].id: cache[env.envs[i].id]})
+                ep_len   = len(cache[env.envs[i].id]["reward"]) - 1
+                ep_score = float(np.asarray(cache[env.envs[i].id]["reward"]).sum())
+                video    = cache[env.envs[i].id]["image"]
+
+                # custom log keys coming from the env itself
+                for k in list(cache[env.envs[i].id].keys()):
+                    if k.startswith("log_"):
+                        logger.scalar(k, float(np.asarray(cache[env.envs[i].id][k]).sum()))
+                        cache[env.envs[i].id].pop(k)             # drop after logging
+
+                if not is_eval:                                   # training mode
+                    ds_size = erase_over_episodes(cache, limit)
+                    logger.scalar("dataset_size",  ds_size)
+                    logger.scalar("train_return",  ep_score)
+                    logger.scalar("train_length",  ep_len)
+                    logger.scalar("train_episodes", len(cache))
+                    logger.write(step=logger.step)
+                else:                                             # evaluation
+                    if not "eval_lengths" in locals():
+                        eval_lengths = []
+                        eval_scores = []
+                        eval_done = False
+
+                    eval_scores.append(ep_score)
+                    eval_lengths.append(ep_len)
+                    logger.video("eval_policy", np.array(video)[None])
+
+                    if len(eval_scores) >= episodes and not eval_done:
+                        logger.scalar("eval_return",   np.mean(eval_scores))
+                        logger.scalar("eval_length",   np.mean(eval_lengths))
+                        logger.scalar("eval_episodes", len(eval_scores))
+                        logger.write(step=logger.step)
+                        eval_done = True
+
+        obs = next_obs  # advance
+
+    # keep last episode (for dreamer video prediction etc.)
+    if is_eval:
+        while len(cache) > 1:
+            cache.popitem(last=False)
+
+    return (step - steps, episode - episodes, done, length, obs, agent_state, reward)
 
 def add_to_cache(cache, id, transition):
     if id not in cache:
