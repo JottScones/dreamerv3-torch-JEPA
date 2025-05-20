@@ -11,14 +11,13 @@ class TimeLimit(gym.Wrapper):
         self._step = None
 
     def step(self, action):
-
         assert self._step is not None, "Must reset environment."
         obs, reward, done, info = self.env.step(action)
         self._step += 1
         if self._step >= self._duration:
-            done = np.ones(self.env._num_envs, dtype=bool) if hasattr(self.env, "_num_envs") else True
+            done = np.ones(self.env._num_envs, dtype=bool) if hasattr(self.env, "num_envs") else True
             if "discount" not in info:
-                info["discount"] = np.ones(self.env._num_envs).astype(np.float32) if hasattr(self.env, "_num_envs") else np.array(1.0).astype(np.float32)
+                info["discount"] = np.ones(self.env._num_envs).astype(np.float32) if hasattr(self.env, "num_envs") else np.array(1.0).astype(np.float32)
             self._step = None
         return obs, reward, done, info
 

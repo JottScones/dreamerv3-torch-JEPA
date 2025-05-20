@@ -343,8 +343,6 @@ def main(config):
                 ),
                 1,
             )
-            print(random_actor)
-            print(random_actor.sample())
 
         # agent samples action from uniform distibution
         def random_agent(o, d, s):
