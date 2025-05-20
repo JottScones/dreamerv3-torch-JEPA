@@ -298,9 +298,9 @@ def simulate_vector(
         if done.any():
             reset_mask = done.copy()                              # shape (B,)
             if obs is None:                                       # first call
-                obs, _ = env.reset()
+                obs = env.reset()
             else:
-                obs, _ = env.reset(options={"reset_mask": reset_mask})
+                obs = env.reset(options={"reset_mask": reset_mask})
             # log the initial time-step for every reset env
             for i in np.where(reset_mask)[0]:
                 first = {k: convert(v[i]) for k, v in obs.items()}
