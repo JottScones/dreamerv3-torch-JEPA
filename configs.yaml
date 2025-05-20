@@ -252,9 +252,7 @@ memorymaze:
   task: "memorymaze_9x9"
 
 maniskill:
-  parallel: True
   steps: 1e6
-  envs: 8
   action_repeat: 1
   actor: { dist: "onehot", std: "none" }
   imag_gradient: "reinforce"
