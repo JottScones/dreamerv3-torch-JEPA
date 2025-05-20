@@ -285,9 +285,9 @@ def simulate_vector(
     # --- initialise or restore ------------------------------------------------
     if state is None:
         step = episode = 0
-        done   = np.ones(num_envs, dtype=bool)   # force a full reset
+        done = np.ones(num_envs, dtype=bool)   # force a full reset
         length = np.zeros(num_envs,  dtype=np.int32)
-        obs    = None
+        obs = None
         agent_state = None
         reward = np.zeros(num_envs, dtype=np.float32)
     else:
@@ -306,7 +306,7 @@ def simulate_vector(
             # log the initial time-step for every reset env
             for i in np.where(reset_mask)[0]:
                 first = {k: convert(v[i]) for k, v in obs.items()}
-                first["reward"]   = 0.0
+                first["reward"] = 0.0
                 first["discount"] = 1.0
                 add_to_cache(cache, vector_id(env, i), first)
             done[:] = False                                        # clear flags
@@ -326,8 +326,9 @@ def simulate_vector(
 
         # 4) Book-keeping ------------------------------------------------------
         episode += int(done.sum())
-        step    += num_envs
-        length   = (length + 1) * (1 - done)                      # reset per-env
+        step += num_envs
+        length += 1
+        length *= ~done                      # reset per-env
 
         # 5) Store transitions -------------------------------------------------
         for i in range(num_envs):
