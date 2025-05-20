@@ -325,10 +325,11 @@ def simulate_vector(
         next_obs, reward, done, info = env.step(act_np)
 
         # 4) Book-keeping ------------------------------------------------------
+        done = np.asarray(done)
         episode += int(done.sum())
         step += num_envs
         length += 1
-        length *= ~done                      # reset per-env
+        length *= 1 - done                      # reset per-env
 
         # 5) Store transitions -------------------------------------------------
         for i in range(num_envs):
