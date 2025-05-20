@@ -1,5 +1,6 @@
 import mani_skill.envs
 import gymnasium as gym
+import numpy as np
 
 to_np = lambda x: x.detach().cpu().numpy()
 class ManiSkill:
@@ -28,11 +29,9 @@ class ManiSkill:
 
     @property
     def observation_space(self):
-        spaces = self._env.observation_space.spaces.copy()
-
         return gym.spaces.Dict(
             {
-                **spaces,
+                "image": gym.spaces.Box(0, 255, self._size + (3,), dtype=np.uint8),
                 "is_first": gym.spaces.Box(0, 1, (), dtype=bool),
                 "is_last": gym.spaces.Box(0, 1, (), dtype=bool),
                 "is_terminal": gym.spaces.Box(0, 1, (), dtype=bool),
