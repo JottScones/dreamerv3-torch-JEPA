@@ -278,7 +278,7 @@ def simulate_vector(
     episodes=0,
     state=None,
 ):
-    env = envs[0]
+    env = envs[0]._env
     num_envs = env.num_envs
     # --- initialise or restore ------------------------------------------------
     if state is None:
