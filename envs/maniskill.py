@@ -60,7 +60,7 @@ class ManiSkill:
         obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"].squeeze(0))
         obs["is_first"] = False
         obs["is_last"] = done
-        obs["is_terminal"] = info.get("success", False)
+        obs["is_terminal"] = info["success"].squeeze() if "success" in info else False
         return obs, reward, done, info
 
     def reset(self):
