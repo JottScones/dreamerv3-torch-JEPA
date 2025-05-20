@@ -279,6 +279,8 @@ def simulate_vector(
     state=None,
 ):
     env = envs[0]._env
+    vector_id = lambda env, i: f"{env.id}-{i}"
+
     num_envs = env.num_envs
     # --- initialise or restore ------------------------------------------------
     if state is None:
@@ -306,7 +308,7 @@ def simulate_vector(
                 first = {k: convert(v[i]) for k, v in obs.items()}
                 first["reward"]   = 0.0
                 first["discount"] = 1.0
-                add_to_cache(cache, env.envs[i].id, first)
+                add_to_cache(cache, vector_id(env, i), first)
             done[:] = False                                        # clear flags
 
         # 2) Policy interaction ------------------------------------------------
@@ -338,21 +340,21 @@ def simulate_vector(
                 trans["action"] = act_np[i]
             trans["reward"]   = reward[i]
             trans["discount"] = info.get("discount", 1.0 - float(done[i]))
-            add_to_cache(cache, env.envs[i].id, trans)
+            add_to_cache(cache, vector_id(env, i), trans)
 
         # 6) End-of-episode logging & dataset maintenance ----------------------
         if done.any():
             for i in np.where(done)[0]:
-                save_episodes(directory, {env.envs[i].id: cache[env.envs[i].id]})
-                ep_len   = len(cache[env.envs[i].id]["reward"]) - 1
-                ep_score = float(np.asarray(cache[env.envs[i].id]["reward"]).sum())
-                video    = cache[env.envs[i].id]["image"]
+                save_episodes(directory, {vector_id(env, i): cache[vector_id(env, i)]})
+                ep_len   = len(cache[vector_id(env, i)]["reward"]) - 1
+                ep_score = float(np.asarray(cache[vector_id(env, i)]["reward"]).sum())
+                video    = cache[vector_id(env, i)]["image"]
 
                 # custom log keys coming from the env itself
-                for k in list(cache[env.envs[i].id].keys()):
+                for k in list(cache[vector_id(env, i)].keys()):
                     if k.startswith("log_"):
-                        logger.scalar(k, float(np.asarray(cache[env.envs[i].id][k]).sum()))
-                        cache[env.envs[i].id].pop(k)             # drop after logging
+                        logger.scalar(k, float(np.asarray(cache[vector_id(env, i)][k]).sum()))
+                        cache[vector_id(env, i)].pop(k)             # drop after logging
 
                 if not is_eval:                                   # training mode
                     ds_size = erase_over_episodes(cache, limit)
