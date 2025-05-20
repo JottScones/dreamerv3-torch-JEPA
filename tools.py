@@ -341,7 +341,7 @@ def simulate_vector(
                 else:
                     trans["action"] = act_np[i]
                 trans["reward"]   = reward[i]
-                trans["discount"] = info.get("discount", 1.0 - float(done[i]))
+                trans["discount"] = info["discount"][i] if "discount" in info else 1.0 - float(done[i])
                 add_to_cache(cache, vector_id(env, i), trans)
         except IndexError as e:
             print(pre_done)
