@@ -338,8 +338,8 @@ def main(config):
         else:
             random_actor = torchd.independent.Independent(
                 torchd.uniform.Uniform(
-                    torch.tensor(acts.low).repeat(config.envs, 1),
-                    torch.tensor(acts.high).repeat(config.envs, 1),
+                    torch.tensor(acts.low).repeat(config.num_vector_envs, 1),
+                    torch.tensor(acts.high).repeat(config.num_vector_envs, 1),
                 ),
                 1,
             )
