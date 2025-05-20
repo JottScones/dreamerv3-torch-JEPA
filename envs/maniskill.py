@@ -1,6 +1,7 @@
 import mani_skill.envs
 import gymnasium as gym
 
+to_np = lambda x: x.detach().cpu().numpy()
 class ManiSkill:
     def __init__(self, task="PushT-v1", obs_key="image", act_key="action", size=(64, 64), seed=0, control_mode="pd_joint_delta_pos"):
         # 9x9, 11x11, 13x13 and 15x15 are available
@@ -50,8 +51,11 @@ class ManiSkill:
         res = self._env.step(action)
         raw_obs, reward, done, truncated, info = res
 
+        reward = reward.squeeze()
+        done = done.squeeze()
+
         obs = dict()
-        obs["image"] = raw_obs["sensor_data"]["base_camera"]["rgb"]
+        obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"])
         obs["is_first"] = False
         obs["is_last"] = done
         obs["is_terminal"] = info.get("success", False)
@@ -61,8 +65,26 @@ class ManiSkill:
         raw_obs, info = self._env.reset(seed=self._seed)
 
         obs = dict()
-        obs["image"] = raw_obs["sensor_data"]["base_camera"]["rgb"].detach().cpu()
+        obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"])
         obs["is_first"] = True
         obs["is_last"] = False
         obs["is_terminal"] = False
         return obs
+
+"""
+Logdir logdir/test_maniskill
+Create envs.
+/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/lib/python3.9/site-packages/sapien/_vulkan_tricks.py:37: UserWarning: Failed to find Vulkan ICD file. This is probably due to an incorrect or partial installation of the NVIDIA driver. SAPIEN will attempt to provide an ICD file anyway but it may not work.
+  warn(
+Action Space Box(-1.0, 1.0, (7,), float32)
+Prefill dataset (2500 steps).
+Traceback (most recent call last):
+  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 458, in <module>
+    main(parser.parse_args(remaining))
+  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer.py", line 351, in main
+    state = tools.simulate(
+  File "/rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/tools.py", line 201, in simulate
+    length *= 1 - done
+ValueError: non-broadcastable output operand with shape (1,) doesn't match the broadcast shape (1,1)
+"""
+
