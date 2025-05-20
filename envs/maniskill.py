@@ -20,7 +20,7 @@ class ManiSkill:
         self._obs_key = obs_key
         self._act_key = act_key
         self._size = size
-        self._num_envs = num_envs
+        self.num_envs = num_envs
 
     def __getattr__(self, name):
         if name.startswith("__"):
@@ -61,12 +61,12 @@ class ManiSkill:
 
         obs = {}
         obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"])
-        obs["is_first"] = np.zeros(self._num_envs, dtype=bool)
+        obs["is_first"] = np.zeros(self.num_envs, dtype=bool)
         obs["is_last"] = done
         if "success" in info:
             obs["is_terminal"] = to_np(info["success"].cpu())
         else:
-            obs["is_terminal"] = np.zeros(self._num_envs, dtype=bool)
+            obs["is_terminal"] = np.zeros(self.num_envs, dtype=bool)
 
         return obs, reward, done, info
 
@@ -75,9 +75,9 @@ class ManiSkill:
 
         obs = {}
         obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"])
-        obs["is_first"] = np.ones(self._num_envs, dtype=bool)
-        obs["is_last"] = np.zeros(self._num_envs, dtype=bool)
-        obs["is_terminal"] = np.zeros(self._num_envs, dtype=bool)
+        obs["is_first"] = np.ones(self.num_envs, dtype=bool)
+        obs["is_last"] = np.zeros(self.num_envs, dtype=bool)
+        obs["is_terminal"] = np.zeros(self.num_envs, dtype=bool)
         return obs
 """
 Action Space Box(-1.0, 1.0, (7,), float32)
