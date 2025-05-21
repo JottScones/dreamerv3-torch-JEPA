@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import re
+from functools import partial
 
 import torch
 from torch import nn
@@ -8,6 +9,7 @@ import torch.nn.functional as F
 from torch import distributions as torchd
 
 import tools
+from ijepa.src.models.vision_transformer import VisionTransformer
 
 
 class RSSM(nn.Module):
@@ -642,7 +644,107 @@ class ConvEncoder(nn.Module):
         # Separate the batch and time dimensions again.
         # (batch * time, -1) -> (batch, time, -1)
         return x.reshape(list(obs.shape[:-3]) + [x.shape[-1]])
+    
+class JEPAEncoder(VisionTransformer):
+    def __init__(self, vit_size="small", img_size=[224], **kwargs):
+        base_params = {
+            "norm_layer": partial(nn.LayerNorm, eps=1e-6),
+            "patch_size": 16,
+            "qkv_bias": True
+        }
+        custom_params= {
+            "tiny": { "embed_dim": 192, "depth": 12, "num_heads": 3, "mlp_ratio": 4 },
+            "small": { "embed_dim": 384, "depth": 12, "num_heads": 6, "mlp_ratio": 4 },
+            "base": { "embed_dim": 768, "depth": 12, "num_heads": 12, "mlp_ratio": 4 },
+            "large": { "embed_dim": 1024, "depth": 24, "num_heads": 16, "mlp_ratio": 4 },
+            "huge": { "embed_dim": 1280, "depth": 32, "num_heads": 16, "mlp_ratio": 4 },
+            "giant": { "embed_dim": 1408, "depth": 40, "num_heads": 16, "mlp_ratio": 48/11 },
+        }
+        super().__init__(img_size=img_size, **base_params, **custom_params[vit_size], **kwargs)
 
+        self.vit_size = vit_size
+        self.outdim = self.patch_embed.num_patches * self.embed_dim
+
+class JEPAMultiEncoder(nn.Module):
+    """
+    MultiEncoder is a module that combines JEPA and MLP encoders for processing image and vector data, respectively.
+    """
+    def __init__(
+        self,
+        shapes,
+        mlp_keys,
+        image_keys,
+        act,
+        norm,
+        vit_size,
+        mlp_layers,
+        mlp_units,
+        symlog_inputs,
+    ):
+        super(MultiEncoder, self).__init__()
+        excluded = ("is_first", "is_last", "is_terminal", "reward")
+
+        # Shapes are expected to be a dictionary with keys as the names of the inputs/observations and values as their shapes.
+        shapes = {
+            k: v
+            for k, v in shapes.items()
+            if k not in excluded and not k.startswith("log_")
+        }
+
+        # In the config file we define regex patterns for the keys of the JEPA and MLP inputs.
+        # Here we split the shapes into JEPA and MLP shapes based on these patterns.
+        self.image_shapes = {
+            k: v for k, v in shapes.items() if len(v) == 3 and re.match(image_keys, k)
+        }
+        self.mlp_shapes = {
+            k: v
+            for k, v in shapes.items()
+            if len(v) in (1, 2) and re.match(mlp_keys, k)
+        }
+        print("Encoder JEPA shapes:", self.image_shapes)
+        print("Encoder MLP shapes:", self.mlp_shapes)
+
+        self.outdim = 0
+        if self.image_shapes:
+            # Expect all images to have same height and width and concatenate along the channel axis.
+            # The height and width of the first image in the shapes dictionary.
+            input_ch = sum([v[-1] for v in self.image_shapes.values()])
+            input_shape = tuple(self.image_shapes.values())[0][:2] + (input_ch,)
+            # Create JEPA encoder.
+            self._jepa = JEPAEncoder(img_size=[input_shape], vit_size=vit_size)
+            self.outdim += self._jepa.outdim
+
+        if self.mlp_shapes:
+            # We sum over the number of elements in each input since we will flatten and concatenate them.
+            input_size = sum([sum(v) for v in self.mlp_shapes.values()])
+            # Create MLP encoder.
+            self._mlp = MLP(
+                input_size,
+                None,
+                mlp_layers,
+                mlp_units,
+                act,
+                norm,
+                symlog_inputs=symlog_inputs,
+                name="Encoder",
+            )
+            self.outdim += mlp_units
+
+    def forward(self, obs):
+        # torch.cat(dim=-1) concatenates the tensors along the last dimension - which is the channel for images 
+        # and a single vector for MLP.
+        outputs = []
+        if self.image_shapes:
+            inputs = torch.cat([obs[k] for k in self.image_shapes], -1)
+            outputs.append(self._jepa(inputs))
+
+        if self.mlp_shapes:
+            inputs = torch.cat([obs[k] for k in self.mlp_shapes], -1)
+            outputs.append(self._mlp(inputs))
+        
+        # Both encoders produce vectors so we can concatenate them.
+        outputs = torch.cat(outputs, -1)
+        return outputs
 
 class ConvDecoder(nn.Module):
     """

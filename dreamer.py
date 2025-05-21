@@ -83,7 +83,7 @@ class Dreamer(nn.Module):
                     self._metrics[name] = []
 
                 # Also produce video predictions if desired
-                if self._config.video_pred_log:
+                if self._config.video_pred_log and not self._config.no_decoder:
                     openl = self._wm.video_pred(next(self._dataset))
                     self._logger.video("train_openl", to_np(openl))
 
@@ -396,7 +396,7 @@ def main(config):
                 is_eval=True,
                 episodes=config.eval_episode_num,
             )
-            if config.video_pred_log:
+            if config.video_pred_log and not config.no_decoder:
                 video_pred = agent._wm.video_pred(next(eval_dataset))
                 logger.video("eval_openl", to_np(video_pred))
 

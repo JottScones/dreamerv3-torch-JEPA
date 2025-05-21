@@ -53,6 +53,7 @@ defaults:
       mlp_layers: 5,
       mlp_units: 1024,
       symlog_inputs: True,
+      vit_size: "small",
     }
   decoder:
     {
