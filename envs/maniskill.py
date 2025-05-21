@@ -29,7 +29,6 @@ class ManiSkill:
         self._act_key = act_key
         self._size = size
         self.num_envs = num_envs
-        print(f"rwrd: {env.reward_mode}")
 
     def __getattr__(self, name):
         if name.startswith("__"):
@@ -42,7 +41,7 @@ class ManiSkill:
     @property
     def observation_space(self):
         spaces = self._env.single_observation_space.spaces.copy()
-        views = spaces["rgb"]
+        views = spaces["sensor_data"]["base_camera"]["rgb"]
         if views.shape[0] > 1:
             print(f"multiple views are not yet supported")
 
