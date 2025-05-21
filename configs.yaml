@@ -259,8 +259,9 @@ maniskill:
   task: "maniskill_PushT-v1"
   control_mode: "pd_joint_delta_pos"
   eval_episode_num: 10
-  size: [256, 256]
+  size: [64, 64]
   video_pred_log: True
+  time_limit: 100
 
 debug:
   debug: True
