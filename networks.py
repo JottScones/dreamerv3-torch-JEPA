@@ -646,10 +646,10 @@ class ConvEncoder(nn.Module):
         return x.reshape(list(obs.shape[:-3]) + [x.shape[-1]])
     
 class JEPAEncoder(VisionTransformer):
-    def __init__(self, vit_size="small", img_size=[224], **kwargs):
+    def __init__(self, vit_size="small", img_size=224, patch_size=14, checkpoint_path=None, **kwargs):
         base_params = {
             "norm_layer": partial(nn.LayerNorm, eps=1e-6),
-            "patch_size": 16,
+            "patch_size": patch_size,
             "qkv_bias": True
         }
         custom_params= {
@@ -660,10 +660,34 @@ class JEPAEncoder(VisionTransformer):
             "huge": { "embed_dim": 1280, "depth": 32, "num_heads": 16, "mlp_ratio": 4 },
             "giant": { "embed_dim": 1408, "depth": 40, "num_heads": 16, "mlp_ratio": 48/11 },
         }
-        super().__init__(img_size=img_size, **base_params, **custom_params[vit_size], **kwargs)
+        super().__init__(img_size=[img_size], **base_params, **custom_params[vit_size], **kwargs)
+
+
+        if checkpoint_path:
+            checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+
+            epoch = checkpoint['epoch']
+            
+            pretrained_dict = checkpoint['encoder']
+            msg = self.load_state_dict(pretrained_dict)
+            print(f'loaded pretrained encoder from epoch {epoch} with msg: {msg}')
 
         self.vit_size = vit_size
+        self.img_size = img_size
         self.outdim = self.patch_embed.num_patches * self.embed_dim
+
+    def forward(self, obs, masks=None):
+        obs -= 0.5
+        x = obs.reshape((-1,) + tuple(obs.shape[-3:]))
+
+        # Reorder the dimensions to match the expected input shape of the Conv2d layer.
+        # (batch * time, h, w, ch) -> (batch * time, ch, h, w)
+        x = x.permute(0, 3, 1, 2)
+
+        # Resize to 224x224
+        x = F.interpolate(x, size=(self.img_size, self.img_size), mode='bilinear', align_corners=False)
+
+        return super().forward(x, masks)
 
 class JEPAMultiEncoder(nn.Module):
     """
@@ -713,6 +737,9 @@ class JEPAMultiEncoder(nn.Module):
             # Create JEPA encoder.
             self._jepa = JEPAEncoder(img_size=[input_shape], vit_size=vit_size)
             self.outdim += self._jepa.outdim
+
+            # Freeze weights
+            self._jepa.requires_grad_(False)
 
         if self.mlp_shapes:
             # We sum over the number of elements in each input since we will flatten and concatenate them.
