@@ -264,8 +264,6 @@ maniskill:
   vector_env: True
   num_vector_envs: 32
   time_limit: 100
-  batch_size: 32
-  train_ratio: 512
 
 debug:
   debug: True
