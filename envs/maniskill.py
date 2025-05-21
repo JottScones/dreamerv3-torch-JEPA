@@ -17,11 +17,11 @@ class ManiSkill:
             control_mode=control_mode, # there is also "pd_joint_delta_pos", ...
             sim_backend="physx_cuda"
         )
-        env = ManiSkillVectorEnv(env, auto_reset=False, ignore_terminations=False)
         env = FlattenRGBDObservationWrapper(env, rgb=True, depth=False, state=False)
-
         if isinstance(env.action_space, gym.spaces.Dict):
             env = FlattenActionSpaceWrapper(env)
+
+        env = ManiSkillVectorEnv(env, auto_reset=False, ignore_terminations=False)
 
         self._env = env
         self._seed = seed
