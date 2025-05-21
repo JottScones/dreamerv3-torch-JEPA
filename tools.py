@@ -321,6 +321,7 @@ def save_episodes(directory, episodes):
             f1.seek(0)
             with filename.open("wb") as f2:
                 f2.write(f1.read())
+        print(episode)
     return True
 
 
