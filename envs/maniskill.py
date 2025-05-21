@@ -41,7 +41,7 @@ class ManiSkill:
     @property
     def observation_space(self):
         spaces = self._env.single_observation_space.spaces.copy()
-        views = spaces["sensor_data"]["base_camera"]["rgb"]
+        views = spaces["rgb"]
         if views.shape[0] > 1:
             print(f"multiple views are not yet supported")
 
