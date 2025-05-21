@@ -259,13 +259,12 @@ maniskill:
   task: "maniskill_PushT-v1"
   control_mode: "pd_joint_delta_pos"
   eval_episode_num: 10
-  size: [256, 256]
+  size: [64, 64]
   video_pred_log: True
   vector_env: True
-  num_vector_envs: 128
+  num_vector_envs: 32
   time_limit: 100
   batch_size: 32
-  batch_length: 20
   train_ratio: 512
 
 debug:
