@@ -1,6 +1,8 @@
 import mani_skill.envs
 import gymnasium as gym
 from mani_skill.vector.wrappers.gymnasium import ManiSkillVectorEnv
+from mani_skill.utils.wrappers.flatten import FlattenRGBDObservationWrapper, FlattenActionSpaceWrapper
+
 import numpy as np
 
 to_np = lambda x: x.detach().cpu().numpy()
@@ -15,7 +17,13 @@ class ManiSkill:
             control_mode=control_mode, # there is also "pd_joint_delta_pos", ...
             sim_backend="physx_cuda"
         )
-        self._env = ManiSkillVectorEnv(env, auto_reset=False, ignore_terminations=False)
+        env = ManiSkillVectorEnv(env, auto_reset=False, ignore_terminations=False)
+        env = FlattenRGBDObservationWrapper(env, rgb=True, depth=False, state=False)
+
+        if isinstance(env.action_space, gym.spaces.Dict):
+            env = FlattenActionSpaceWrapper(env)
+
+        self._env = env
         self._seed = seed
         self._obs_key = obs_key
         self._act_key = act_key
@@ -33,7 +41,7 @@ class ManiSkill:
     @property
     def observation_space(self):
         spaces = self._env.single_observation_space.spaces.copy()
-        views = spaces["sensor_data"]["base_camera"]["rgb"]
+        views = spaces["rgb"]
         if views.shape[0] > 1:
             print(f"multiple views are not yet supported")
 
@@ -60,7 +68,7 @@ class ManiSkill:
         done = done.cpu()
 
         obs = {}
-        obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"])
+        obs["image"] = to_np(raw_obs["rgb"])
         obs["is_first"] = np.zeros(self.num_envs, dtype=bool)
         obs["is_last"] = done
         if "success" in info:
@@ -74,7 +82,7 @@ class ManiSkill:
         raw_obs, info = self._env.reset(*args, seed=self._seed, **kwargs)
 
         obs = {}
-        obs["image"] = to_np(raw_obs["sensor_data"]["base_camera"]["rgb"])
+        obs["image"] = to_np(raw_obs["rgb"])
         obs["is_first"] = np.ones(self.num_envs, dtype=bool)
         obs["is_last"] = np.zeros(self.num_envs, dtype=bool)
         obs["is_terminal"] = np.zeros(self.num_envs, dtype=bool)

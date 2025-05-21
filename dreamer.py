@@ -243,6 +243,7 @@ def make_env(config, mode, id):
 
     elif suite == "maniskill":
         import envs.maniskill as maniskill
+
         env = maniskill.ManiSkill(task=task, seed=config.seed + id, size=config.size, control_mode=config.control_mode, num_envs=config.num_vector_envs)
         env = wrappers.NormalizeActions(env)
 
