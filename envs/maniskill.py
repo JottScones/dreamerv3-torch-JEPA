@@ -29,6 +29,7 @@ class ManiSkill:
         self._act_key = act_key
         self._size = size
         self.num_envs = num_envs
+        print(f"rwrd: {env.reward_mode}")
 
     def __getattr__(self, name):
         if name.startswith("__"):
@@ -57,7 +58,6 @@ class ManiSkill:
     @property
     def action_space(self):
         space = self._env.single_action_space
-        space.discrete = True
         return space
 
     def step(self, action):
@@ -87,6 +87,3 @@ class ManiSkill:
         obs["is_last"] = np.zeros(self.num_envs, dtype=bool)
         obs["is_terminal"] = np.zeros(self.num_envs, dtype=bool)
         return obs
-"""
-
-"""
