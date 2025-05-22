@@ -133,9 +133,10 @@ class WorldModel(nn.Module):
             assert name in self.heads, name
 
         # initialise optimiser (opt=adam default)
+        self.trainable_params = [p for p in self.parameters() if p.requires_grad]
         self._model_opt = tools.Optimizer(
             "model",
-            self.parameters(),
+            self.trainable_params,
             config.model_lr,
             config.opt_eps,
             config.grad_clip,
@@ -144,7 +145,7 @@ class WorldModel(nn.Module):
             use_amp=self._use_amp,
         )
         print(
-            f"Optimizer model_opt has {sum(param.numel() for param in self.parameters())} variables."
+            f"Optimizer model_opt has {sum(param.numel() for param in self.trainable_params)} variables."
         )
         # other losses are scaled by 1.0.
         self._scales = dict(
@@ -212,7 +213,7 @@ class WorldModel(nn.Module):
                 model_loss = sum(scaled.values()) + kl_loss
             
             # Calculate the gradients and update the model parameters
-            metrics = self._model_opt(torch.mean(model_loss), self.parameters())
+            metrics = self._model_opt(torch.mean(model_loss), self.trainable_params)
 
         metrics.update({f"{name}_loss": to_np(loss) for name, loss in losses.items()})
         metrics["kl_free"] = kl_free
