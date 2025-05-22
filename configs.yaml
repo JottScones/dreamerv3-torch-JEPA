@@ -252,6 +252,7 @@ memorymaze:
   task: "memorymaze_9x9"
 
 maniskill:
+  # Might need to use a larger Dreamer model size
   steps: 1e6
   action_repeat: 1
   actor: { dist: "onehot", std: "none" }
