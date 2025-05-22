@@ -697,7 +697,7 @@ class JEPAMultiEncoder(nn.Module):
         self,
         shapes,
         mlp_keys,
-        image_keys,
+        cnn_keys,
         act,
         norm,
         vit_size,
@@ -705,6 +705,7 @@ class JEPAMultiEncoder(nn.Module):
         mlp_units,
         symlog_inputs,
     ):
+        image_keys = cnn_keys
         super(MultiEncoder, self).__init__()
         excluded = ("is_first", "is_last", "is_terminal", "reward")
 
