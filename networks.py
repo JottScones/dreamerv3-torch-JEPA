@@ -683,7 +683,7 @@ class JEPAEncoder(VisionTransformer):
 
         self.vit_size = vit_size
         self.img_size = img_size
-        self.outdim = self.patch_embed.num_patches * self.embed_dim
+        self.outdim = self.embed_dim
 
     def forward(self, obs, masks=None):
         obs -= 0.5
@@ -697,9 +697,11 @@ class JEPAEncoder(VisionTransformer):
         x = F.interpolate(x, size=(self.img_size, self.img_size), mode='bilinear', align_corners=False)
 
         x = super().forward(x, masks)
+        # (batch * time, T, D)
 
-        # combine last two dimensions
-        x = x.reshape([x.shape[0], np.prod(x.shape[1:])])
+        # average pool
+        x = x.mean(dim=1)
+        # (batch * time, D)
 
         # Separate the batch and time dimensions again.
         # (batch * time, -1) -> (batch, time, -1)
