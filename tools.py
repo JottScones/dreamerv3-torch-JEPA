@@ -345,8 +345,7 @@ def simulate_vector(
 
         # 6) End-of-episode logging & dataset maintenance ----------------------
         if done.any():
-            done_idxs = np.where(done)[0]
-            for i in done_idxs:
+            for i in np.where(done)[0]:
                 save_episodes(directory, {vector_id(env, i): cache[vector_id(env, i)]})
                 ep_len   = len(cache[vector_id(env, i)]["reward"]) - 1
                 ep_score = float(np.asarray(cache[vector_id(env, i)]["reward"]).sum())
@@ -357,22 +356,14 @@ def simulate_vector(
                     if k.startswith("log_"):
                         logger.scalar(k, float(np.asarray(cache[vector_id(env, i)][k]).sum()))
                         cache[vector_id(env, i)].pop(k)             # drop after logging
-                
-                if not is_eval:                                   # training mode
-                    if i == done_idxs[0]:
-                        train_scores = []
-                    train_scores.append(ep_score)
 
+                if not is_eval:                                   # training mode
                     ds_size = erase_over_episodes(cache, limit)
                     logger.scalar("dataset_size",  ds_size)
                     logger.scalar("train_return",  ep_score)
                     logger.scalar("train_length",  ep_len)
                     logger.scalar("train_episodes", len(cache))
-
-                    if i == np.where(done)[0][-1]: 
-                        logger.scalar("train_return_avg",  np.mean(train_scores))
                     logger.write(step=logger.step)
-
                 else:                                             # evaluation
                     if not "eval_lengths" in locals():
                         eval_lengths = []
