@@ -707,7 +707,7 @@ class JEPAMultiEncoder(nn.Module):
         **kwargs
     ):
         image_keys = cnn_keys
-        super(MultiEncoder, self).__init__()
+        super(JEPAMultiEncoder, self).__init__()
         excluded = ("is_first", "is_last", "is_terminal", "reward")
 
         # Shapes are expected to be a dictionary with keys as the names of the inputs/observations and values as their shapes.
