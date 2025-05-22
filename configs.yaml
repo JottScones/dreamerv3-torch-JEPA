@@ -262,7 +262,7 @@ maniskill:
   size: [64, 64]
   video_pred_log: True
   vector_env: True
-  num_vector_envs: 32
+  num_vector_envs: 256
   time_limit: 100
 
 debug:
