@@ -704,6 +704,7 @@ class JEPAMultiEncoder(nn.Module):
         mlp_layers,
         mlp_units,
         symlog_inputs,
+        **kwargs
     ):
         image_keys = cnn_keys
         super(MultiEncoder, self).__init__()
