@@ -692,7 +692,14 @@ class JEPAEncoder(VisionTransformer):
         # Resize to 224x224
         x = F.interpolate(x, size=(self.img_size, self.img_size), mode='bilinear', align_corners=False)
 
-        return super().forward(x, masks)
+        x = super().forward(x, masks)
+
+        # combine last two dimensions
+        x = x.reshape([x.shape[0], np.prod(x.shape[1:])])
+
+        # Separate the batch and time dimensions again.
+        # (batch * time, -1) -> (batch, time, -1)
+        return x.reshape(list(obs.shape[:-3]) + [x.shape[-1]])
 
 class JEPAMultiEncoder(nn.Module):
     """
