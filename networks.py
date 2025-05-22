@@ -660,7 +660,7 @@ class JEPAEncoder(VisionTransformer):
             "huge": { "embed_dim": 1280, "depth": 32, "num_heads": 16, "mlp_ratio": 4 },
             "giant": { "embed_dim": 1408, "depth": 40, "num_heads": 16, "mlp_ratio": 48/11 },
         }
-        super().__init__(img_size=[img_size], **base_params, **custom_params[vit_size], **kwargs)
+        super().__init__(img_size=img_size, **base_params, **custom_params[vit_size], **kwargs)
 
 
         if checkpoint_path:
