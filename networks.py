@@ -255,8 +255,6 @@ class RSSM(nn.Module):
         prior = self.img_step(prev_state, prev_action)
 
         # Concatenate the recurrent state with the embedding of the visual and vector inputs (sensory input x_t).
-        print(f"prior: {prior}")
-        print(f"embed: {embed}")
         x = torch.cat([prior["deter"], embed], -1)
 
         # Pass the concatenated input through a linear layer to produce the input for the sufficient statistics layer.
@@ -666,7 +664,6 @@ class JEPAEncoder(VisionTransformer):
 
 
         if checkpoint_path:
-            print(f'loaded pretrained encoder from epoch {epoch} with msg: {msg}')
             checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
 
             epoch = checkpoint['epoch']
@@ -716,6 +713,7 @@ class JEPAMultiEncoder(nn.Module):
         mlp_layers,
         mlp_units,
         symlog_inputs,
+        checkpoint_path,
         **kwargs
     ):
         image_keys = cnn_keys
@@ -745,7 +743,7 @@ class JEPAMultiEncoder(nn.Module):
         self.outdim = 0
         if self.image_shapes:
             # Create JEPA encoder.
-            self._jepa = JEPAEncoder(vit_size=vit_size)
+            self._jepa = JEPAEncoder(vit_size=vit_size, checkpoint_path=checkpoint_path)
             self.outdim += self._jepa.outdim
 
             # Freeze weights

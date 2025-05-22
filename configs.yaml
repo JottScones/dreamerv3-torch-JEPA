@@ -54,6 +54,7 @@ defaults:
       mlp_units: 1024,
       symlog_inputs: True,
       vit_size: "small",
+      checkpoint_path: False,
     }
   decoder:
     {
