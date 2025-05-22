@@ -660,7 +660,7 @@ class JEPAEncoder(VisionTransformer):
             "huge": { "embed_dim": 1280, "depth": 32, "num_heads": 16, "mlp_ratio": 4 },
             "giant": { "embed_dim": 1408, "depth": 40, "num_heads": 16, "mlp_ratio": 48/11 },
         }
-        super().__init__(img_size=img_size, **base_params, **custom_params[vit_size], **kwargs)
+        super().__init__(img_size=[img_size], **base_params, **custom_params[vit_size], **kwargs)
 
 
         if checkpoint_path:
@@ -732,12 +732,8 @@ class JEPAMultiEncoder(nn.Module):
 
         self.outdim = 0
         if self.image_shapes:
-            # Expect all images to have same height and width and concatenate along the channel axis.
-            # The height and width of the first image in the shapes dictionary.
-            input_ch = sum([v[-1] for v in self.image_shapes.values()])
-            input_shape = tuple(self.image_shapes.values())[0][:2] + (input_ch,)
             # Create JEPA encoder.
-            self._jepa = JEPAEncoder(img_size=[input_shape], vit_size=vit_size)
+            self._jepa = JEPAEncoder(vit_size=vit_size)
             self.outdim += self._jepa.outdim
 
             # Freeze weights
