@@ -2,6 +2,7 @@ import math
 import numpy as np
 import re
 from functools import partial
+from dataclasses import asdict
 
 import torch
 from torch import nn
@@ -9,7 +10,9 @@ import torch.nn.functional as F
 from torch import distributions as torchd
 
 import tools
-from ijepa.src.models.vision_transformer import VisionTransformer
+from ijepa.src.models.vision_transformer import VisionTransformer as IJEPA
+from perception_models.core.vision_encoder.pe import VisionTransformer as PerceptionEncoder
+from perception_models.core.vision_encoder.config import PE_VISION_CONFIG, fetch_pe_checkpoint
 
 
 class RSSM(nn.Module):
@@ -644,8 +647,8 @@ class ConvEncoder(nn.Module):
         # Separate the batch and time dimensions again.
         # (batch * time, -1) -> (batch, time, -1)
         return x.reshape(list(obs.shape[:-3]) + [x.shape[-1]])
-    
-class JEPAEncoder(VisionTransformer):
+
+class JEPAEncoder(IJEPA):
     def __init__(self, vit_size="small", img_size=224, patch_size=14, checkpoint_path=None, **kwargs):
         base_params = {
             "norm_layer": partial(nn.LayerNorm, eps=1e-6),
@@ -781,6 +784,127 @@ class JEPAMultiEncoder(nn.Module):
         if self.image_shapes:
             inputs = torch.cat([obs[k] for k in self.image_shapes], -1)
             outputs.append(self._jepa(inputs))
+
+        if self.mlp_shapes:
+            inputs = torch.cat([obs[k] for k in self.mlp_shapes], -1)
+            outputs.append(self._mlp(inputs))
+        
+        # Both encoders produce vectors so we can concatenate them.
+        outputs = torch.cat(outputs, -1)
+        return outputs
+    
+class PEEncoder(PerceptionEncoder):
+    def __init__(self, img_size=224, checkpoint_path=None, **kwargs):
+        args = asdict(PE_VISION_CONFIG[checkpoint_path])
+        args.update(**kwargs)
+        
+        super.__init__(**args)
+
+        if checkpoint_path:
+            self.load_ckpt(fetch_pe_checkpoint(checkpoint_path))
+            print(f'loaded pretrained encoder')
+        else:
+            print(f'NOT loaded pretrained encoder {checkpoint_path}')
+
+        self.img_size = img_size
+        self.outdim = self.output_dim
+
+    def forward(self, obs, masks=None):
+        obs -= 0.5
+        x = obs.reshape((-1,) + tuple(obs.shape[-3:]))
+
+        # Reorder the dimensions to match the expected input shape of the Conv2d layer.
+        # (batch * time, h, w, ch) -> (batch * time, ch, h, w)
+        x = x.permute(0, 3, 1, 2)
+
+        # Resize to 224x224
+        x = F.interpolate(x, size=(self.img_size, self.img_size), mode='bilinear', align_corners=False)
+
+        x = super().forward(x, masks)
+        x = F.normalize(x, dim=-1) 
+        # (batch * time, T, D)
+
+        # average pool
+        x = x.mean(dim=1)
+        # (batch * time, D)
+
+        # Separate the batch and time dimensions again.
+        # (batch * time, -1) -> (batch, time, -1)
+        return x.reshape(list(obs.shape[:-3]) + [x.shape[-1]])
+
+class PEMultiEncoder(nn.Module):
+    """
+    MultiEncoder is a module that combines JEPA and MLP encoders for processing image and vector data, respectively.
+    """
+    def __init__(
+        self,
+        shapes,
+        mlp_keys,
+        cnn_keys,
+        act,
+        norm,
+        mlp_layers,
+        mlp_units,
+        symlog_inputs,
+        checkpoint_path,
+        **kwargs
+    ):
+        image_keys = cnn_keys
+        super(JEPAMultiEncoder, self).__init__()
+        excluded = ("is_first", "is_last", "is_terminal", "reward")
+
+        # Shapes are expected to be a dictionary with keys as the names of the inputs/observations and values as their shapes.
+        shapes = {
+            k: v
+            for k, v in shapes.items()
+            if k not in excluded and not k.startswith("log_")
+        }
+
+        # In the config file we define regex patterns for the keys of the JEPA and MLP inputs.
+        # Here we split the shapes into JEPA and MLP shapes based on these patterns.
+        self.image_shapes = {
+            k: v for k, v in shapes.items() if len(v) == 3 and re.match(image_keys, k)
+        }
+        self.mlp_shapes = {
+            k: v
+            for k, v in shapes.items()
+            if len(v) in (1, 2) and re.match(mlp_keys, k)
+        }
+        print("Encoder PE shapes:", self.image_shapes)
+        print("Encoder MLP shapes:", self.mlp_shapes)
+
+        self.outdim = 0
+        if self.image_shapes:
+            # Create JEPA encoder.
+            self._PE = PEEncoder(checkpoint_path=checkpoint_path)
+            self.outdim += self._PE
+
+            # Freeze weights
+            self._PE.requires_grad_(False)
+
+        if self.mlp_shapes:
+            # We sum over the number of elements in each input since we will flatten and concatenate them.
+            input_size = sum([sum(v) for v in self.mlp_shapes.values()])
+            # Create MLP encoder.
+            self._mlp = MLP(
+                input_size,
+                None,
+                mlp_layers,
+                mlp_units,
+                act,
+                norm,
+                symlog_inputs=symlog_inputs,
+                name="Encoder",
+            )
+            self.outdim += mlp_units
+
+    def forward(self, obs):
+        # torch.cat(dim=-1) concatenates the tensors along the last dimension - which is the channel for images 
+        # and a single vector for MLP.
+        outputs = []
+        if self.image_shapes:
+            inputs = torch.cat([obs[k] for k in self.image_shapes], -1)
+            outputs.append(self._PE(inputs))
 
         if self.mlp_shapes:
             inputs = torch.cat([obs[k] for k in self.mlp_shapes], -1)

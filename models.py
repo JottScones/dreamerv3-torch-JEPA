@@ -56,7 +56,13 @@ class WorldModel(nn.Module):
         self._config = config
         shapes = {k: tuple(v.shape) for k, v in obs_space.spaces.items()}
 
-        self.encoder = networks.JEPAMultiEncoder(shapes, **config.encoder) if config.use_jepa else networks.MultiEncoder(shapes, **config.encoder) 
+        encoders = {
+            "simple": networks.MultiEncoder,
+            "jepa": networks.JEPAMultiEncoder, 
+            "peception_encoder": networks.PEMultiEncoder
+        }
+
+        self.encoder = encoders[config.encoder_type](shapes, **config.encoder) 
         self.embed_size = self.encoder.outdim
 
         self.dynamics = networks.RSSM(
@@ -90,13 +96,13 @@ class WorldModel(nn.Module):
             feat_size = config.dyn_stoch + config.dyn_deter
 
         # Decoder takes the model state and tries to recover the inputs
-        if config.use_jepa:
-            # By default we still have a decoder but we do not update encoder, or RSSM using decoder reconstruction
-            config.grad_heads = [h for h in config.grad_heads if h != 'decoder']
+        # if config.encoder_type != "simple":
+        #     # By default we still have a decoder but we do not update encoder, or RSSM using decoder reconstruction
+        #     config.grad_heads = [h for h in config.grad_heads if h != 'decoder']
 
-            # If specified we run without a decoder as well
-            if not config.no_decoder:
-                self.heads["decoder"] = networks.MultiDecoder(feat_size, shapes, **config.decoder)
+        #     # If specified we run without a decoder as well
+        if not config.no_decoder:
+            self.heads["decoder"] = networks.MultiDecoder(feat_size, shapes, **config.decoder)
 
         # Reward predictor takes the model state and tries to predict the instantaneous reward
         self.heads["reward"] = networks.MLP(

@@ -143,7 +143,7 @@ defaults:
 
   #IJEPA
   no_decoder: False
-  use_jepa: False
+  encoder_type: "simple"
 
 dmc_proprio:
   steps: 5e5
@@ -214,13 +214,18 @@ atari100k: &atari100k
 
 atari100kJEPA:
   <<: *atari100k
-  use_jepa: True
+  encoder_type: "jepa"
   encoder:
     {
       vit_size: "huge",
       image_patch: 14,
       checkpoint_path: "./checkpoints/IN1K-vit.h.14-300e.pth.tar",
     }
+
+atari100kPE:
+  <<: *atari100k
+  encoder_type: "perception_encoder"
+  encoder: { checkpoint_path: "PE-Core-B16-224" }
 
 minecraft:
   task: minecraft_diamond
