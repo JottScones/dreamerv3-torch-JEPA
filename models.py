@@ -59,7 +59,7 @@ class WorldModel(nn.Module):
         encoders = {
             "simple": networks.MultiEncoder,
             "jepa": networks.JEPAMultiEncoder, 
-            "peception_encoder": networks.PEMultiEncoder
+            "perception_encoder": networks.PEMultiEncoder
         }
 
         self.encoder = encoders[config.encoder_type](shapes, **config.encoder) 
