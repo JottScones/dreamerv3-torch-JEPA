@@ -821,11 +821,6 @@ class PEEncoder(PerceptionEncoder):
         x = F.interpolate(x, size=(self.img_size, self.img_size), mode='bilinear', align_corners=False)
         x = super().forward(x)
         x = F.normalize(x, dim=-1) 
-        # (batch * time, T, D)
-
-        # average pool
-        x = x.mean(dim=1)
-        # (batch * time, D)
 
         # Separate the batch and time dimensions again.
         # (batch * time, -1) -> (batch, time, -1)
