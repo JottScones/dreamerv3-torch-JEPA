@@ -22,7 +22,7 @@
 #! Note that the job submission script will enforce no more than 32 cpus per GPU.
 #SBATCH --gres=gpu:1
 #! How much wallclock time will be required?
-#SBATCH --time=24:00:00
+#SBATCH --time=1:00:00
 #! What types of email messages do you wish to receive?
 #SBATCH --mail-type=NONE
 #! Uncomment this to prevent the job from being requeued (e.g. if
@@ -37,7 +37,7 @@
 #! ######################################################################################
 #! ######################################################################################
 #! set configurations in run.py, e.g. options="--train_json=train_fbank.json --lr=0.01":
-options="--configs atari100k --logdir ./logdir/baseline_atari_pong"
+options="--configs atari100kJEPA --logdir ./logdir/frozen_ijpea_atari_pong_test"
 
 #! ######################################################################################
 #! ######################################################################################
@@ -60,7 +60,7 @@ module purge                               # Removes all modules still loaded
 module load rhel8/default-amp              # REQUIRED - loads the basic environment
 
 source /home/${USER}/.bashrc
-source /rds/user/swj24/hpc-work/dissertation/dreamerv3-torch-JEPA/dreamer/bin/activate
+conda activate dreamer_jepa
 #! Insert additional module load commands after this line if needed:
 
 #! Full path to application executable: 
