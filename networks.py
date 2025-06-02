@@ -798,7 +798,7 @@ class PEEncoder(PerceptionEncoder):
         args = asdict(PE_VISION_CONFIG[checkpoint_path])
         args.update(**kwargs)
         
-        super.__init__(**args)
+        super().__init__(**args)
 
         if checkpoint_path:
             self.load_ckpt(fetch_pe_checkpoint(checkpoint_path))
@@ -819,8 +819,7 @@ class PEEncoder(PerceptionEncoder):
 
         # Resize to 224x224
         x = F.interpolate(x, size=(self.img_size, self.img_size), mode='bilinear', align_corners=False)
-
-        x = super().forward(x, masks)
+        x = super().forward(x)
         x = F.normalize(x, dim=-1) 
         # (batch * time, T, D)
 
@@ -850,7 +849,7 @@ class PEMultiEncoder(nn.Module):
         **kwargs
     ):
         image_keys = cnn_keys
-        super(JEPAMultiEncoder, self).__init__()
+        super(PEMultiEncoder, self).__init__()
         excluded = ("is_first", "is_last", "is_terminal", "reward")
 
         # Shapes are expected to be a dictionary with keys as the names of the inputs/observations and values as their shapes.
@@ -877,7 +876,7 @@ class PEMultiEncoder(nn.Module):
         if self.image_shapes:
             # Create JEPA encoder.
             self._PE = PEEncoder(checkpoint_path=checkpoint_path)
-            self.outdim += self._PE
+            self.outdim += self._PE.outdim
 
             # Freeze weights
             self._PE.requires_grad_(False)
